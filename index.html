@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Měření v IKT - Příprava na testy</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --secondary: #64748b;
+            --bg: #f8fafc;
+            --card-bg: #ffffff;
+            --text: #1e293b;
+            --accent: #059669;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 40px 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        h1 {
+            color: var(--primary);
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        p.subtitle {
+            color: var(--secondary);
+            font-size: 1.1rem;
+        }
+
+        .container {
+            max-width: 900px;
+            width: 100%;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s, box-shadow 0.2s;
+            text-decoration: none;
+            color: inherit;
+            display: flex;
+            flex-direction: column;
+            border-left: 5px solid var(--primary);
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+
+        .card.exam {
+            border-left-color: var(--accent);
+        }
+
+        .card h2 {
+            margin: 0 0 10px 0;
+            font-size: 1.4rem;
+            color: var(--text);
+        }
+
+        .card p {
+            margin: 0;
+            color: var(--secondary);
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+
+        .tag {
+            display: inline-block;
+            margin-top: 15px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            color: var(--primary);
+        }
+
+        .exam .tag {
+            color: var(--accent);
+        }
+
+        footer {
+            margin-top: 50px;
+            color: var(--secondary);
+            font-size: 0.85rem;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Měření v IKT</h1>
+        <p class="subtitle">Rozcestník pro přípravu ke zkoušce</p>
+    </header>
+
+    <div class="container">
+        <!-- Přednášky 1-2 -->
+        <a href="mikt1_2.html" class="card">
+            <div class="tag">Přednášky</div>
+            <h2>MIKT 1 & 2</h2>
+            <p>Základy měření, chyby měření a úvodní koncepty IKT systémů.</p>
+        </a>
+
+        <!-- Přednášky 3-4 -->
+        <a href="mikt3_4.html" class="card">
+            <div class="tag">Přednášky</div>
+            <h2>MIKT 3 & 4</h2>
+            <p>Pokročilé metody měření a analýza signálů v sítích.</p>
+        </a>
+
+        <!-- Přednášky 5-6 -->
+        <a href="mikt5_6.html" class="card">
+            <div class="tag">Přednášky</div>
+            <h2>MIKT 5 & 6</h2>
+            <p>Specifická měření v komunikačních technologiích a závěrečné okruhy.</p>
+        </a>
+
+        <!-- AI Zkouška -->
+        <a href="mikt_AI_zk.html" class="card exam">
+            <div class="tag">Komplexní test</div>
+            <h2>MIKT AI Zkouška</h2>
+            <p>Souhrnný test pokrývající veškeré učivo z přednášek 1 až 6.</p>
+        </a>
+
+        <!-- Klasická Zkouška -->
+        <a href="mikt_zkouska.html" class="card exam">
+            <div class="tag">Archiv 2024</div>
+            <h2>MIKT Zkouška</h2>
+            <p>Reálné testové otázky ze zkouškového období roku 2024.</p>
+        </a>
+    </div>
+
+    <footer>
+        &copy; 2024 Studijní materiály MIKT
+    </footer>
+
+</body>
+</html>
