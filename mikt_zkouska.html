@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <title>Zkouškový simulátor - Spektrální analýza a MW spoje</title>
+    <style>
+        :root { --primary: #1a73e8; --bg: #f8f9fa; --text: #202124; --blue-square: #007bff; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); margin: 0; display: flex; height: 100vh; overflow: hidden; }
+        
+        /* Navigace */
+        #sidebar { width: 280px; background: #fff; border-right: 1px solid #dadce0; display: flex; flex-direction: column; padding: 20px; overflow-y: auto; }
+        .nav-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 20px; }
+        .nav-item { width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; border: 1px solid #dadce0; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+        .nav-item.flagged { background: var(--blue-square) !important; color: white; border-color: var(--blue-square); }
+        .status-green { background: #e6f4ea; color: #1e8e3e; border-color: #ceead6; }
+        .status-orange { background: #fff4e5; color: #d97706; border-color: #ffe0b2; }
+        .status-red { background: #fce8e6; color: #d93025; border-color: #fad2cf; }
+
+        /* Hlavní obsah */
+        #main-content { flex: 1; padding: 40px; overflow-y: auto; scroll-behavior: smooth; }
+        .header-stats { position: sticky; top: -40px; background: var(--primary); color: white; padding: 20px; border-radius: 0 0 15px 15px; margin: -40px -40px 30px -40px; display: flex; justify-content: space-between; z-index: 100; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        
+        .q-card { background: #fff; border-radius: 12px; padding: 30px; margin-bottom: 40px; border: 1px solid #dadce0; }
+        .q-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 15px; }
+        .q-id-box { display: flex; align-items: center; gap: 10px; }
+        
+        .blue-sq-icon { width: 20px; height: 20px; background: var(--blue-square); display: inline-block; cursor: pointer; border-radius: 3px; opacity: 0.3; }
+        .blue-sq-icon.active { opacity: 1; }
+
+        .opt-label { display: flex; align-items: flex-start; padding: 15px; border: 2px solid #eee; border-radius: 10px; margin-bottom: 10px; cursor: pointer; transition: 0.1s; }
+        .opt-label:hover { border-color: var(--primary); background: #f8fbff; }
+        .opt-label input { margin-right: 15px; margin-top: 5px; transform: scale(1.2); }
+        
+        .correct { background: #e6f4ea !important; border-color: #34a853 !important; }
+        .wrong { background: #fce8e6 !important; border-color: #ea4335 !important; }
+        
+        .check-btn { width: 100%; padding: 15px; background: #2c3e50; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; margin-top: 15px; }
+        .points-feedback { margin-top: 15px; font-weight: bold; padding: 10px; border-radius: 6px; display: none; }
+
+        #setup { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 1000; display: flex; align-items: center; justify-content: center; color: white; }
+        .setup-card { background: #202124; padding: 40px; border-radius: 20px; max-width: 450px; width: 90%; text-align: center; border: 1px solid #3c4043; }
+    </style>
+</head>
+<body>
+
+<div id="setup">
+    <div class="setup-card">
+        <h2>Příprava na zkoušku 2024</h2>
+        <p>Všechny otázky odpovídají plnému znění z PDF.</p>
+        <div style="text-align:left; margin: 20px 0;">
+            <label><input type="checkbox" id="shufQ"> Náhodné pořadí úloh</label><br><br>
+            <label><input type="checkbox" id="shufA"> Náhodné pořadí odpovědí</label>
+        </div>
+        <button class="check-btn" onclick="start()">SPUSTIT TEST</button>
+    </div>
+</div>
+
+<div id="sidebar">
+    <h3>Navigace testu</h3>
+    <div id="navGrid" class="nav-grid"></div>
+    <div style="margin-top:20px; font-size: 0.85em; line-height: 1.6;">
+        <span style="display:inline-block; width:12px; height:12px; background:var(--blue-square); border-radius:2px;"></span> Modrý čtverec = "Vlaječka"<br>
+        <span style="color:#1e8e3e">■</span> Správně (100 %)<br>
+        <span style="color:#d97706">■</span> Částečně správně<br>
+        <span style="color:#d93025">■</span> Nesprávně (0 %)
+    </div>
+</div>
+
+<div id="main-content">
+    <div class="header-stats">
+        <div id="prog">Zodpovězeno: 0 / 40</div>
+        <div id="score">Body: 0,00 / 0,00</div>
+    </div>
+    <div id="quiz"></div>
+</div>
+
+<script>
+// Plná data ze zdrojového PDF
+const master = [
+    { id: 1, q: "Pro AM modulátor platí:", opts: ["Násobička slouží k modulování nosné vlny zprávou.", "Sčítačka slouží k nastavení offsetu pro vysílanou zprávu.", "Ke svému efektivnímu fungování potřebuje alespoň dva bloky - sčítačku a násobičku.", "Násobička slouží k nastavení offsetu pro vysílanou zprávu.", "Sčítačka slouží k modulování nosné viny zprávou."], ans: [0,1,2], pts: 1.0 },
+    { id: 2, q: "Systematická chyba zatěžující výsledek měření voltmetrem:", opts: ["je dana úbytkem napětí na připojeném voltmetru.", "Je dana jeho třídou přesnosti", "Je nepřímo úměrná jeho vstupnimu odporu."], ans: [2], pts: 2.0 },
+    { id: 3, q: "Rozšířená nejistota měření se vyjadřuje:", opts: ["Rozšířením standardni nejistoty typu A", "Jako kombinovaná nejistota měření vynásobená koeficientem rozšíření, jehož hodnota závisí na tvaru statistického rozložení", "Statistickým zpracováním výběrového statistického souboru opakovaných výsledků měření"], ans: [1], pts: 2.0 },
+    { id: 4, q: "Při stanovení výpočtu rezervy na únik (fade margin):", opts: ["Nepočítáme nic, rezervy jsou pro slabochy.", "Vypočítáme všechny druhy útlumů, pro rezervu využijeme jejich součet", "Vypočítáme všechny druhy útlumů, pro rezervu využijeme ten nejvyšší."], ans: [2], pts: 1.0 },
+    { id: 5, q: "Pro Fresnelovu zónu platí:", opts: ["Má tvar rotačního elipsoidu.", "V první zóně se přenáší 90% energie mezi vysílací a přijímací anténou.", "V první zóně se přenáší 10% energie mezi vysílací a přijímací anténou.", "Za nejdůležitějších se považuje 60% z první Fresnelovy zóny."], ans: [0,1,3], pts: 1.0 },
+    { id: 6, q: "Vzorkovaná syntéza sinusové křivky je charakterizována:", opts: ["Vzorkováním výstupu krystalového oscilátoru", "Skládáním vzorkovaného signálu z více harmonických složek", "D/A převodníkem, který převádí digitální hodnoty z tabulky funkčních hodnot"], ans: [2], pts: 2.0 },
+    { id: 7, q: "Kombinovaná nejistota měření se vyjadřuje:", opts: ["Geometrickým součtem standardní nejistoty typu A a standardni nejistoty typu B", "Statistickým zpracováním výběrového statistického souboru opakovaných měření", "Přepočtem z mezní chyby měřicího přístroje"], ans: [0], pts: 2.0 },
+    { id: 8, q: "Antény pro spoj vybíráme:", opts: ["Náhodně. Co se väli ve skladu, to použiji.", "Co největší. Každý musí vědět, že na to máme.", "Efektivně. Pokud to není nutné, použiji menší a levnější anténu."], ans: [2], pts: 1.0 },
+    { id: 9, q: "Fyzikální princip senzoru s termočlánkem pro měření vf výkonu a jeho dynamický rozsah je:", opts: ["Usměrnění měřeného vf výkoneu diodami - můžeme měřit jednotky wattů až desítky wattů", "Měření ohřevu hmoty způsobeného protékajícím měřeným vf výkonem, můžeme měřit jednotky mikrowattů až desítky wattů", "Rozvážení můstkového zapojení s termistory - můžeme měřit jednotky až stovky miliwattů"], ans: [1], pts: 2.0 },
+    { id: 10, q: "O frekvenci mikrovlnného spoje obecně platí:", opts: ["Nezáleží na frekvenci technologie, všude použijeme tu stejnou.", "Vyšší frekvence používáme na kratší spoje, nižší frekvence na delší spoje.", "Vyšší frekvence používáme na delší spoje, nižší frekvence na kratší spoje."], ans: [1], pts: 1.0 },
+    { id: 11, q: "Pro měření proudu ampérmetrem platí:", opts: ["Systematická chyba měření se odvozuje z třídy přesnosti ampermetru", "Systematická chyba měření je přímo úměrná vstupnímu odpor ampermetru", "Systematická chyba měření je tím menší, čím je menší vstupní odpor ampérmetru"], ans: [2], pts: 2.0 },
+    { id: 12, q: "Pro modulovaný AM signál platí:", opts: ["Spodní obálka signálu odpovídá invertované vysílané zprávě", "Horní obálka signálu odpovídá invertované vysílané zprávě.", "Vrchní obálka signálu odpovídá vysílané zprávě.", "Spodní obálka signálu odpovídá vysílané zprávě."], ans: [0,2], pts: 1.0 },
+    { id: 13, q: "Fyzikální princip diodového senzoru pro měření vť výkonu a jeho dynamický rozsah je:", opts: ["Rozvážení můstkového zapojení diod - můžeme měřit jednotky wattů až desítky wattů", "Usměrnění měřeného vť výkonu, můžeme měřit stovky pikowattů i desítky mikrowattů", "Rozvážení můstkového zapojení termistorů, můžeme měřit jednotky až stovky miliwattů"], ans: [1], pts: 2.0 },
+    { id: 14, q: "Základní výhodou virtuálního měřicího přístroje je:", opts: ["Virtuální měřicí přístroj je menší a méně hmotný než klasický měřicí přístroj", "Virtuální měřicí přístroj je rychlejší než klasický měříci přístroj", "Výstupní formát dat z virtuálního měřicího přístroje se snadno uchovává v počítači"], ans: [2], pts: 2.0 },
+    { id: 15, q: "Hranice frekvenčního pásma osciloskopu končí:", opts: ["Frekvencí, na které pokles frekvenční charakteristiky dosáhne 6 dB", "Frekvencí, kterou je osciloskop schopen zpracovat s přesností 5 procent", "Frekvencí, na které pokles frekvenční charakteristiky dosáhne 3 dB"], ans: [2], pts: 2.0 },
+    { id: 16, q: "Rozdíl mezi FFT spektrálním analyzátorem a rozmítaným spektrálním analyzátorem je:", opts: ["FFT spektrální analyzátor analyzuje postupně jednotlivé harmonické složky, rozmítaný vrací celé spektrum najednou", "Rozmítaný analyzátor vrací postupně jednotlivé frekvenční složky ve tvaru frekvenční charakteristiky použitého mf filtru, FFT spektrální analyzátor pracuje od ss složky a vrací celé spektrum najednou", "FFT spektrální analyzátor pracuje až od určité frekvence a kopíruje frekvenční charakteristiku filtru"], ans: [1], pts: 2.0 },
+    { id: 17, q: "Mikrovlnné spoje se dle frekvenčního přídělu dēli na:", opts: ["Licencované, nelicencované a monitorované, což je speciální skupina nelicencovaných spojů.", "Kupované, nekupované a půjčené", "Používané, nepoužívané a občas používané"], ans: [0], pts: 1.0 },
+    { id: 18, q: "Mezi jednotlivými výrobci mikrovinných spojů jsou klíčové rozdíly v:", opts: ["Efektivita softwarové výbavy (ekvalizace, samoopravné kódy).", "Rozdílný systém úchytu na antény, včetně konstrukce vinovodu,", "Různé barvy jednotek určující rozsah teplot.", "Rozdílná kvalita slitiny těla jednotky.", "Technologie jsou prakticky stejné.", "Rozdílná citlivost přijímače a vysílací výkon."], ans: [0,1,5], pts: 1.0 },
+    { id: 19, q: "Pro stavbu spoje platí:", opts: ["Firmy si mohou libovolně stavět spoje, jak je napadne.", "Každý licencovaný spoj je nutné nasimulovat. Očekává se, že technik navštíví místo. Ke spoji je nutná kompletní dokumentace.", "Každý nelicencovaný spoj je nutné nasimulovat. Dokumentace se podává na zodpovědný orgán."], ans: [1], pts: 1.0 },
+    { id: 20, q: "Plánovanou přenosovou rychlost spoje ovlivňuje primárně:", opts: ["Šířka pásma", "Modulační formát", "Lunární fáze Měsíce.", "Technologický limit použitého HW"], ans: [0,1,3], pts: 1.0 },
+    { id: 21, q: "Tvar vektorového diagramu mobilních telefonů s modulací QPSK a poměr modulační a přenosové rychlosti:", opts: ["Čtverec v komplexní rovině IQ, modulační rychlost = polovina přenosové rychlosti", "Vrcholy čtverce v komplexní rovině IQ, modulační rychlost = přenosová rychlost", "Kružnice v komplexní rovině IQ"], ans: [0], pts: 2.0 },
+    { id: 22, q: "Pro útlum způsobeným deštěm je nutné:", opts: ["Ridit se mapou dešťových zón die ITU-R normy.", "Mit vlastní meteorologickou stanici.", "Ridit se systémem z 5l lahve a živé rosničky."], ans: [0], pts: 1.0 },
+    { id: 23, q: "Oscilátor se zpětnou vazbou je charakterizován:", opts: ["Zesilovačem, do jehož záporné zpětné vazby je zapojen krystal", "Zesilovačem, do jehož kladné zpětné vazby je zapojen filtr", "Krystalovým oscilátorem s použitím fázového závěsu"], ans: [1], pts: 2.0 },
+    { id: 24, q: "Moderní mikrovlnné spoje používají toto modulační schéma:", opts: ["OFDM", "ASK", "QAM", "AM"], ans: [2], pts: 1.0 },
+    { id: 25, q: "Pro výpočet linky (úrovně přijímaného signálu) jsou důležité parametry:", opts: ["Součinitel unavenosti pracovníků", "Hodnota útlumu šíření volným prostorem (dB)", "Hodiny provozu (HH-MM-SS)", "Zisk přijímací antény (dBi)", "Vysílaný výkon (dBm).", "Den v týdnu", "Zisk vysílací antény (dBi)"], ans: [1,3,4,6], pts: 1.0 },
+    { id: 26, q: "Pro stanovení výpočtu rezervy na únik (fade margin) je nutné vypočítat:", opts: ["Útlum výrobní vadou a útlum nekorektním zaměřením.", "Útlum větrem a útlum sluneční erupcí.", "Útlum vicecestným šířením a útlum způsobený deštěm."], ans: [2], pts: 1.0 },
+    { id: 27, q: "Frekvenční syntezátor se skládá z:", opts: ["Volně kmitajícího oscilátoru a komparátoru", "Krystaloveno oscilátoru a komparátoru", "Referenčního krystalového oscilátoru a obvodů úpravy frekvence (násobičky, dělíčky, fázový závěs,...)"], ans: [2], pts: 2.0 },
+    { id: 28, q: "Mikrovlnné spoje z hlediska polarizace:", opts: ["Obecně fungují pouze ve vertikální polarizaci.", "Obecně fungují pouze v horizontální polarizaci.", "Obecné fungují v horizontální nebo vertikální polarizaci."], ans: [2], pts: 1.0 },
+    { id: 29, q: "Oscilátor s komparátorem je charakterizován:", opts: ["Obvodem produkujícím v čase proměnný signál, komparátorem a zesilovačem", "Komparátorem, obvodem produkujícím v čase proměnný signál, a obvodem uvádějícím tento obvod do výchozího stavu", "Obvodem produkujícím v čase proměnný signál, komparátorem a filtrem"], ans: [1], pts: 2.0 },
+    { id: 30, q: "Hlavní ovládací prvky osciloskopu jsou:", opts: ["Nastavení minimální a maximální frekvence", "Nastavení frekvence a amplitudy", "Nastavení zesílení vertikálního zesilovače, časové základny a spouštěcí podmínky"], ans: [2], pts: 2.0 },
+    { id: 31, q: "Absolutní chyba měření analogovým měřícím přístrojem se vypočítá:", opts: ["Z jeho třídy přesnosti a je nepřímo ůměrná měřené veličině.", "Z jeho třídy přesnosti a je konstantní v celém rozsahu", "Z jeho třídy přesnosti a je přímo úměrná měřené veličině."], ans: [1], pts: 2.0 },
+    { id: 32, q: "Příčinou přechodu měřicích přístrojů na číslicovou podobu je:", opts: ["Analogové měřicí přístroje jsou méně přesné", "Číslicové měřicí přístroje umožňují jednoznačnou komunikaci s PC", "Možnost implementace funkcí u analogových přístrojů nerealizovatelných."], ans: [2], pts: 2.0 },
+    { id: 33, q: "Chyba výsledku měření digitálním měřicím přístrojem se vyhodnocuje zpravidla:", opts: ["Ze specifikace mezní chyby přístroje (složka z hodnoty + složka z rozsahu)", "Z třídy přesnosti, absolutní chyba je konstantní", "Relativní chyba je konstantní"], ans: [0], pts: 2.0 },
+    { id: 34, q: "Tvar konstelačního diagramu UMTS mobilních telefonů a poměr rychlostí:", opts: ["Modulační rychlost = dvojnásobek přenosové rychlosti", "Přenosová rychlost je dvojnásobkem modulační rychlosti, vrcholy čtverce v IQ"], ans: [1], pts: 2.0 },
+    { id: 35, q: "XPIC:", opts: ["Zvyšuje přenosovou rychlost spoje na dvojnásobek tím, že se vysílá v obou polarizacích.", "Je název pro nový X-Men tým.", "Zvyšuje rychlost vysíláním ve dvou sousedních kanálech stejné polarizace."], ans: [0], pts: 1.0 },
+    { id: 36, q: "Hlavní ovládací prvky spektrálního analyzátoru jsou:", opts: ["Nastavení RBW a VBW, nastavení centrální frekvence a rozsahu frekvencí (SPAN)", "Nastavení amplitudy", "Zesílení vertikálu a časovka"], ans: [0], pts: 2.0 },
+    { id: 37, q: "Parametry pro výpočet útlumu při šíření volným prostorem jsou:", opts: ["Odhad odstupu signálu od šumu", "Délka trasy spoje (km).", "Vysílací výkon", "Frekvence vysílaného signálu (MHz)."], ans: [1,3], pts: 1.0 },
+    { id: 38, q: "Pro demodulaci AM signálu platí:", opts: ["Stači efektivně extrahovat jednu z obálek (pozor na invertovanou spodní).", "Stači extrahovat jednu z obálek (pozor na invertovanou horní).", "AM modulace konkuruje digitálním modulacím.", "Demodulátor je mnohem složitější"], ans: [0], pts: 1.0 },
+    { id: 39, q: "Aby nedošlo k přemodulování signálu, musí být m < 1. Pravda?", opts: ["Pravda", "Nepravda"], ans: [0], pts: 1.0 },
+    { id: 40, q: "Pro útlum způsobený deštěm platí:", opts: ["Narůstá exponenciálně s intenzitou.", "Vertikální polarizace vykazuje větší útlum.", "Zvětšuje se podstatně s délkou linky (>10 km).", "Výpadky dramaticky narůstají s kmitočtem.", "Horizontální polarizace vykazuje větší útlum než vertikální."], ans: [2,3,4], pts: 1.0 }
+];
+
+let data = [], curScore = 0, maxPosScore = 0, solved = 0;
+
+function start() {
+    const qS = document.getElementById('shufQ').checked, aS = document.getElementById('shufA').checked;
+    data = JSON.parse(JSON.stringify(master));
+    if(qS) data.sort(() => Math.random() - 0.5);
+    if(aS) data.forEach(d => {
+        let os = d.opts.map((o,i) => ({t:o, c:d.ans.includes(i)}));
+        os.sort(() => Math.random() - 0.5);
+        d.opts = os.map(o => o.t); d.ans = os.reduce((a,o,i) => {if(o.c) a.push(i); return a;}, []);
+    });
+    document.getElementById('setup').style.display = 'none';
+    renderNav(); renderQuiz();
+}
+
+function renderNav() {
+    const g = document.getElementById('navGrid');
+    data.forEach((_, i) => {
+        let d = document.createElement('div');
+        d.className = 'nav-item'; d.id = `nav-${i}`;
+        d.innerText = i + 1;
+        d.onclick = () => document.getElementById(`qcard-${i}`).scrollIntoView({behavior:'smooth'});
+        g.appendChild(d);
+    });
+}
+
+function renderQuiz() {
+    const c = document.getElementById('quiz');
+    data.forEach((d, i) => {
+        let isM = d.ans.length > 1;
+        let card = document.createElement('div');
+        card.className = 'q-card'; card.id = `qcard-${i}`;
+        card.innerHTML = `
+            <div class="q-header">
+                <div class="q-id-box">
+                    <span class="blue-sq-icon" id="sq-${i}" onclick="toggleSquare(${i})"></span>
+                    <span id="num-display-${i}" style="font-weight:bold">${i+1}</span>
+                    <span style="color:#666; margin-left:10px">Úloha ${d.id}</span>
+                </div>
+                <div style="color:var(--primary); font-weight:bold">${d.pts.toFixed(2)} b</div>
+            </div>
+            <div style="margin-bottom:25px; line-height:1.4">${d.q}</div>
+            <div id="opts-${i}">
+                ${d.opts.map((o,oi) => `<label class="opt-label"><input type="${isM?'checkbox':'radio'}" name="q${i}" value="${oi}"><span>${o}</span></label>`).join('')}
+            </div>
+            <button class="check-btn" id="btn-${i}" onclick="check(${i})">ODEVZDAT ÚLOHU</button>
+            <div id="feedback-${i}" class="points-feedback"></div>
+        `;
+        c.appendChild(card);
+    });
+}
+
+function toggleSquare(i) {
+    const icon = document.getElementById(`sq-${i}`);
+    const navItem = document.getElementById(`nav-${i}`);
+    const numDisplay = document.getElementById(`num-display-${i}`);
+    
+    icon.classList.toggle('active');
+    navItem.classList.toggle('flagged');
+    
+    const isAct = icon.classList.contains('active');
+    navItem.innerText = isAct ? '?' : i + 1;
+    numDisplay.innerText = isAct ? '?' : i + 1;
+}
+
+function check(i) {
+    const d = data[i], block = document.getElementById(`opts-${i}`);
+    const sel = Array.from(block.querySelectorAll('input:checked')).map(n => parseInt(n.value));
+    if(!sel.length) return alert("Musíte vybrat odpověď!");
+
+    document.getElementById(`btn-${i}`).disabled = true;
+    block.querySelectorAll('input').forEach(inp => inp.disabled = true);
+
+    let correctCount = 0, wrongCount = 0;
+    d.ans.forEach(a => { if(sel.includes(a)) correctCount++; });
+    sel.forEach(s => { if(!d.ans.includes(s)) wrongCount++; });
+
+    // Bodování - penalizace za špatné volby, max body úměrně počtu správných
+    let gain = (correctCount - wrongCount) * (d.pts / d.ans.length);
+    if(gain < 0) gain = 0;
+    
+    curScore += gain; maxPosScore += d.pts; solved++;
+
+    // Zpětná vazba bodů
+    const feed = document.getElementById(`feedback-${i}`);
+    feed.style.display = 'block';
+    feed.innerText = `Získáno ${gain.toFixed(2)} z ${d.pts.toFixed(2)} b`;
+    feed.style.background = gain === d.pts ? '#e6f4ea' : gain > 0 ? '#fff4e5' : '#fce8e6';
+
+    // Barva navigace
+    let nav = document.getElementById(`nav-${i}`);
+    if(gain === d.pts) nav.classList.add('status-green');
+    else if(gain > 0) nav.classList.add('status-orange');
+    else nav.classList.add('status-red');
+
+    // Barvy odpovědí
+    block.querySelectorAll('.opt-label').forEach((l, oi) => {
+        if(d.ans.includes(oi)) l.classList.add('correct');
+        else if(sel.includes(oi)) l.classList.add('wrong');
+    });
+
+    document.getElementById('prog').innerText = `Zodpovězeno: ${solved} / 40`;
+    document.getElementById('score').innerText = `Body: ${curScore.toFixed(2)} / ${maxPosScore.toFixed(2)}`;
+}
+</script>
+</body>
+</html>

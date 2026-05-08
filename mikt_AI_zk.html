@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <title>Trenažér: Měřicí technika a MW spoje (Revize V3)</title>
+    <style>
+        :root { --primary: #1a73e8; --bg: #f1f3f4; --text: #202124; --blue-sq: #007bff; }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: var(--bg); margin: 0; display: flex; height: 100vh; overflow: hidden; }
+        
+        /* Navigace */
+        #sidebar { width: 300px; background: #fff; border-right: 1px solid #dadce0; display: flex; flex-direction: column; padding: 15px; overflow-y: auto; }
+        .nav-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 15px; }
+        .nav-item { width: 55px; height: 55px; display: flex; align-items: center; justify-content: center; border: 1px solid #dadce0; border-radius: 4px; cursor: pointer; font-weight: bold; transition: 0.2s; font-size: 0.9em; }
+        .nav-item.flagged { background: var(--blue-sq) !important; color: white; border-color: var(--blue-sq); }
+        .status-green { background: #e6f4ea; color: #1e8e3e; border-color: #ceead6; }
+        .status-orange { background: #fff4e5; color: #d97706; border-color: #ffe0b2; }
+        .status-red { background: #fce8e6; color: #d93025; border-color: #fad2cf; }
+
+        /* Hlavní obsah */
+        #main-content { flex: 1; padding: 25px; overflow-y: auto; scroll-behavior: smooth; }
+        .header-stats { position: sticky; top: -25px; background: var(--primary); color: white; padding: 15px; border-radius: 0 0 10px 10px; margin: -25px -25px 20px -25px; display: flex; justify-content: space-between; z-index: 100; font-size: 0.95em; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        
+        .q-card { background: #fff; border-radius: 8px; padding: 20px; margin-bottom: 30px; border: 1px solid #dadce0; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .q-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+        .q-title { font-size: 0.95em; font-weight: bold; color: #5f6368; }
+        
+        .blue-sq-icon { width: 20px; height: 20px; background: var(--blue-sq); display: inline-block; cursor: pointer; border-radius: 2px; opacity: 0.2; }
+        .blue-sq-icon.active { opacity: 1; }
+
+        .opt-label { display: flex; align-items: flex-start; padding: 10px 15px; border: 1px solid #f1f3f4; border-radius: 6px; margin-bottom: 8px; cursor: pointer; transition: 0.1s; font-size: 1em; }
+        .opt-label:hover { background: #f8fbff; border-color: #d2e3fc; }
+        .opt-label input { margin-right: 15px; margin-top: 5px; transform: scale(1.2); }
+        
+        .correct { background: #e6f4ea !important; border-color: #34a853 !important; }
+        .wrong { background: #fce8e6 !important; border-color: #ea4335 !important; }
+        
+        .btn-row { display: flex; gap: 10px; margin-top: 15px; }
+        .action-btn { padding: 10px 20px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 0.9em; border: 1px solid #dadce0; }
+        .check-btn { background: #2c3e50; color: white; border: none; flex: 2; }
+        .hint-btn { background: #fff; color: #1a73e8; flex: 1; }
+        
+        .hint-box { display: none; margin-top: 10px; padding: 12px; background: #e8f0fe; border-radius: 4px; font-size: 0.9em; color: #1967d2; border-left: 4px solid #1a73e8; }
+        .rationale-box { margin-top: 8px; font-size: 0.9em; padding: 8px; border-radius: 4px; display: none; line-height: 1.4; border: 1px solid transparent; }
+
+        #setup { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 1000; display: flex; align-items: center; justify-content: center; color: white; }
+        .setup-card { background: #202124; padding: 35px; border-radius: 15px; max-width: 450px; width: 90%; text-align: center; border: 1px solid #3c4043; }
+    </style>
+</head>
+<body>
+
+<div id="setup">
+    <div class="setup-card">
+        <h2>Simulátor: Přednášky 1-6 (V3)</h2>
+        <p>Opraveno: Odstraněny nerelevantní otázky, přidány vícečetné odpovědi a náhodné pořadí.</p>
+        <div style="text-align:left; margin: 25px 0;">
+            <label><input type="checkbox" id="shufQ"> Náhodné pořadí úloh</label><br><br>
+            <label><input type="checkbox" id="shufA" checked> Náhodné pořadí odpovědí (Doporučeno)</label>
+        </div>
+        <button class="action-btn check-btn" style="width:100%; padding:15px; font-size: 1.1em;" onclick="start()">SPUSTIT TEST (60,00 b)</button>
+    </div>
+</div>
+
+<div id="sidebar">
+    <h3>Navigace</h3>
+    <div id="navGrid" class="nav-grid"></div>
+    <div style="margin-top:auto; font-size: 0.8em; color: #70757a; line-height: 1.6;">
+        <span style="display:inline-block; width:12px; height:12px; background:var(--blue-sq); border-radius:2px;"></span> Modrý čtverec = "Vlaječka"<br>
+        <span style="color:#1e8e3e">■</span> Správně (100 %)<br>
+        <span style="color:#d97706">■</span> Částečně správně<br>
+        <span style="color:#d93025">■</span> Nesprávně (0 %)
+    </div>
+</div>
+
+<div id="main-content">
+    <div class="header-stats">
+        <div id="prog">Zodpovězeno: 0 / 40</div>
+        <div id="score">Body: 0,00 / 0,00</div>
+    </div>
+    <div id="quiz"></div>
+</div>
+
+<script>
+const master = [
+    { id: "Pr_02", q: "Při stanovení nejistoty typu B u digitálního měřidla vycházíme z:", opts: ["Údaje o přesnosti v dokumentaci výrobce", "Rozlišení přístroje (počet digitů)", "Opakovaných měření stejné veličiny", "Zákona šíření nejistot"], ans: [0, 1], hint: "Typ B nepoužívá statistiku naměřených dat.", tips: ["Dokumentace je základ uB.", "Kvantizační chyba (digity) patří do uB.", "Opakovaná měření jsou Typ A.", "Zákon šíření je pro nepřímá měření."], pts: 2.0 },
+    { id: "Pr_03", q: "Co způsobuje tzv. 'Aliasing' u digitálního osciloskopu?", opts: ["Nedostatečná vzorkovací frekvence (fs < 2*fmax)", "Příliš vysoký útlum vstupní sondy", "Nesprávná frekvenční kompenzace sondy", "Zobrazení klamné (nižší) frekvence signálu"], ans: [0, 3], hint: "Souvisí s Nyquistovým teorémem.", tips: ["Podvzorkování je příčina.", "Sonda ovlivňuje úroveň, ne aliasing.", "Kompenzace ovlivňuje tvar hran.", "Klamná frekvence je následek."], pts: 2.0 },
+    { id: "Pr_04", q: "Které parametry spektrálního analyzátoru ovlivňují úroveň zobrazeného šumového dna (DANL)?", opts: ["Šířka pásma rozlišovacího filtru (RBW)", "Vstupní útlum (Atenuátor)", "Šířka video filtru (VBW)", "Frekvenční rozsah (Span)"], ans: [0, 1], hint: "Video filtr šum pouze vyhlazuje, ale nesnižuje jeho úroveň.", tips: ["Užší RBW propustí méně šumu.", "Atenuátor zvyšuje šumové číslo.", "VBW jen vyhlazuje vizuálně.", "Span mění rozsah, ne šum."], pts: 2.0 },
+    { id: "Pr_03", q: "Vzorkování 'Peak Detect' u osciloskopu slouží k:", opts: ["Zachycení úzkých impulsů (glitchů) i při pomalých časech", "Zobrazení obálky šumu", "Zvýšení vertikálního rozlišení ADC", "Odstranění aliasingu"], ans: [0, 1], hint: "Ukládá extrémní hodnoty (min/max) v každém intervalu.", tips: ["Hlavní účel pro zachycení špiček.", "Vykresluje extrémy (šum).", "K tomu slouží Hi-Res mód.", "Aliasing nevyřeší."], pts: 1.5 },
+    { id: "Pr_05", q: "Diagram 'Eye Diagram' (oční diagram) umožňuje vyhodnotit:", opts: ["Inter-symbolovou interferenci (ISI)", "Jitter (fázové kolísání)", "Šumovou rezervu signálu", "Absolutní výkon nosné"], ans: [0, 1, 2], hint: "Zobrazuje se překrytím mnoha bitových intervalů.", tips: ["Svislé uzavření oka = ISI.", "Vodorovné rozmazání = Jitter.", "Vnitřní plocha = odolnost šumu.", "Výkon měří spektrák."], pts: 2.0 },
+    { id: "Pr_02", q: "Systematická chyba měření je charakteristická tím, že:", opts: ["Lze ji korigovat výpočtem (opravou)", "Mění svou velikost a znaménko náhodně", "Má konstantní velikost nebo se mění podle známého pravidla", "Vzniká vlivem parazitních vlivů (např. vstupní odpor)"], ans: [0, 2, 3], hint: "Na rozdíl od náhodné chyby ji lze 'předpovědět'.", tips: ["Oprava = -chyba.", "To je náhodná chyba.", "To je její definice.", "Např. chyba metody."], pts: 1.5 },
+    { id: "Pr_04", q: "Proč se u spektrálních analyzátorů používá logaritmická osa amplitudy (dB)?", opts: ["Umožňuje zobrazit velmi malé i velké signály současně", "Zjednodušuje výpočet zisku a útlumu", "Zvyšuje rychlost rozmítání", "Odstraňuje fázový šum"], ans: [0, 1], hint: "Dynamický rozsah může přesahovat 100 dB.", tips: ["Vysoký dynamický rozsah.", "dB se sčítají/odčítají.", "Nemá vliv na rychlost HW.", "Šum zůstává."], pts: 1.0 },
+    { id: "Pr_06", q: "U mikrovlnných spojů závisí útlum volným prostorem na:", opts: ["Vzdálenosti mezi anténami (d)", "Frekvenci vysílaného signálu (f)", "Vysílaném výkonu (P)", "Zisku antén (G)"], ans: [0, 1], hint: "Lbf = 32.4 + 20log f + 20log d.", tips: ["Základní geometrický útlum.", "Kmitočet je kritický faktor.", "Výkon útlum prostoru nemění.", "Zisk je anténa, ne prostor."], pts: 1.5 },
+    { id: "Pr_03", q: "Mezi hlavní výhody použití osciloskopické sondy 10:1 patří:", opts: ["Zvýšení vstupního odporu (např. na 10 MOhm)", "Snížení vstupní kapacity (menší zatížení zdroje)", "Zesílení signálu pro měření malých napětí", "Rozšíření frekvenčního rozsahu měření"], ans: [0, 1, 3], hint: "Sonda 10:1 signál tlumí, nikoliv zesiluje.", tips: ["Menší proudový odběr.", "Šetří obvod u vysokých f.", "Lež, sonda tlumí.", "Menší C = širší pásmo."], pts: 2.0 },
+    { id: "Pr_02", q: "Kombinovaná standardní nejistota uc se u nekorelovaných veličin počítá jako:", opts: ["Geometrický součet (odmocnina součtu čtverců) dílčích nejistot", "Prostý aritmetický součet nejistot", "Vždy jako největší z naměřených nejistot", "Podíl nejistoty typu A a typu B"], ans: [0], hint: "Používá se kvadratické sčítání.", tips: ["Standardní metrologický postup.", "To by nadhodnotilo chybu.", "Ne, všechny vlivy se sčítají.", "Nesmysl."], pts: 1.5 },
+    { id: "Pr_05", q: "Vektorový konstelační diagram u modulace 16-QAM obsahuje:", opts: ["16 bodů v komplexní rovině", "Amplitudovou i fázovou informaci", "Pouze fázovou informaci", "Kruhovou trajektorii"], ans: [0, 1], hint: "QAM kombinuje ASK a PSK.", tips: ["2 na 4 je 16 bodů.", "Poloha bodu dává A i fi.", "To by byla PSK.", "Ne, body jsou v mřížce."], pts: 1.5 },
+    { id: "Pr_04", q: "Rozlišovací šířka pásma (RBW) u analyzátoru ovlivňuje:", opts: ["Schopnost rozlišit dva blízké signály", "Rychlost rozmítání (Sweep time)", "Úroveň šumového dna", "Vstupní útlum"], ans: [0, 1, 2], hint: "Užší RBW vyžaduje pomalejší rozmítání.", tips: ["Klíčová vlastnost selektivity.", "Užší filtr = delší ustálení.", "Užší RBW = méně šumu.", "Atenuátor je nezávislý."], pts: 2.0 },
+    { id: "Pr_06", q: "Absolutní zisk antény (dBi) je vztažen k:", opts: ["Izotropnímu bodovému zdroji", "Půlvlnnému dipólu", "Ideálnímu zrcadlu", "Všesměrové anténě v dBd"], ans: [0], hint: "i = Isotropic.", tips: ["Standardní referenční bod.", "To je dBd.", "Nesmysl.", "Referencí je bod."], pts: 1.0 },
+    { id: "Pr_03", q: "Interpolace sin(x)/x v digitálním osciloskopu je vhodná pro:", opts: ["Sinusové signály", "Signály se spektrem pod Nyquistovou frekvencí", "Strmé hrany digitálních pulsů s překmity", "Měření stejnosměrného napětí"], ans: [0, 1], hint: "Předpokládá omezené spektrum signálu.", tips: ["Ideální využití.", "Matematický předpoklad.", "Zde tvoří artefakty (Gibbs).", "Interpolace ss je zbytečná."], pts: 1.5 },
+    { id: "Pr_02", q: "Při zápisu výsledku měření 'x = (10.02 ± 0.05) V' hodnota 0.05 představuje:", opts: ["Rozšířenou nejistotu U", "Standardní nejistotu typu A", "Absolutní chybu přístroje", "Směrodatnou odchylku"], ans: [0], hint: "Uvádí se obvykle s koeficientem k=2.", tips: ["Standardní formát výsledku.", "uA je jen dílčí.", "Chyba není nejistota.", "Nestačí k zápisu."], pts: 1.0 },
+    { id: "Pr_04", q: "Superheterodynní přijímač v analyzátoru trpí na rušení:", opts: ["Zrcadlovým kmitočtem (Image frequency)", "Vlastním šumem směšovače", "Kvantizačním šumem ADC", "Změnou barvy displeje"], ans: [0, 1, 2], hint: "Zrcadlový kmitočet vzniká procesem směšování.", tips: ["Hlavní nevýhoda principu.", "Každý aktivní prvek šumí.", "Digitální část vnáší chybu.", "Nesmysl."], pts: 1.5 },
+    { id: "Pr_01", q: "Virtuální měřicí přístroje (např. v LabVIEW) umožňují:", opts: ["Definovat funkci přístroje softwarem", "Snadnou archivaci a sdílení dat", "Měření bez jakéhokoliv hardwaru", "Využití výkonu PC pro analýzu"], ans: [0, 1, 3], hint: "Potřebují alespoň DAQ kartu.", tips: ["Základní definice.", "Výhoda digitálního prostředí.", "Lež, HW (čidla) je nutný.", "Analýza běží v CPU."], pts: 1.5 },
+    { id: "Pr_02", q: "Relativní chyba měření se vyjadřuje v:", opts: ["Procentech [%]", "Jednotkách měřené veličiny", "Bezrozměrně (poměrem)", "Decibelech [dB]"], ans: [0, 2], hint: "delta = Delta x / xt.", tips: ["Nejčastější vyjádření.", "To je absolutní chyba.", "Matematická podstata.", "Méně obvyklé pro chyby."], pts: 1.0 },
+    { id: "Pr_03", q: "Časová základna osciloskopu (Time/div) ovlivňuje:", opts: ["Rychlost vodorovného vychylování paprsku", "Zobrazený počet period signálu", "Vertikální citlivost", "Jas stopy"], ans: [0, 1], hint: "Mění měřítko na ose X.", tips: ["Mění se rychlost sweepu.", "Více div = více času.", "Osa Y je nezávislá.", "U moderních nepřímo."], pts: 1.0 },
+    { id: "Pr_05", q: "Která modulace má konstantní obálku (vhodné pro nelineární zesilovače)?", opts: ["GMSK", "FSK", "64-QAM", "AM"], ans: [0, 1], hint: "U amplitudových modulací se obálka mění.", tips: ["Standard pro GSM.", "Frekvenční klíčování.", "Kombinuje AM, obálka kolísá.", "Amplituda je v názvu."], pts: 1.5 },
+    { id: "Pr_04", q: "FFT analyzátor se od rozmítaného liší tím, že:", opts: ["Pracuje v reálném čase", "Vypočítává spektrum z časového vzorku", "Může měřit pouze sinusovky", "Je vždy levnější"], ans: [0, 1], hint: "Fast Fourier Transform.", tips: ["Zachycuje signál naráz.", "Matematický princip.", "Měří jakýkoliv signál.", "Často dražší (DSP)."], pts: 1.5 },
+    { id: "Pr_02", q: "Hrubé chyby (omyly) jsou způsobeny:", opts: ["Nepozorností pozorovatele", "Vadným měřicím přístrojem", "Náhlým selháním vybavení", "Statistickým rozptylem"], ans: [0, 2], hint: "Musí se z měření vyloučit.", tips: ["Klasický lidský faktor.", "To je systematická chyba.", "Technická závada.", "To je náhodná chyba."], pts: 1.0 },
+    { id: "Pr_03", q: "Režim vzorkování 'Averaging' (průměrování) slouží k:", opts: ["Potlačení náhodného šumu v signálu", "Zvýšení efektivního vertikálního rozlišení", "Zobrazení aliasů", "Zrychlení měření"], ans: [0, 1], hint: "Vyžaduje stabilní periodický signál.", tips: ["Náhodný šum se vyruší.", "Zlepšuje SNR.", "Aliasy naopak potlačuje.", "Naopak měření zpomaluje."], pts: 1.5 },
+    { id: "Pr_04", q: "Vstupní útlumový článek (atenuátor) spektrálního analyzátoru:", opts: ["Chrání vstupní směšovač před zničením", "Snižuje úroveň intermodulačního zkreslení", "Zvyšuje citlivost přístroje", "Filtruje stejnosměrnou složku"], ans: [0, 1], hint: "Útlum zvyšuje šumové dno.", tips: ["Ochrana HW.", "Lineární režim směšovače.", "Lež, útlum citlivost snižuje.", "K tomu slouží DC block."], pts: 1.5 },
+    { id: "Pr_05", q: "Parametr BER (Bit Error Rate) udává:", opts: ["Poměr chybně přijatých bitů k celkovému počtu vyslaných", "Kvalitu digitálního spoje", "Maximální rychlost v Baudech", "Fázový jitter"], ans: [0, 1], hint: "Statistický ukazatel chybovosti.", tips: ["Definice BER.", "Hlavní metrika kvality.", "To je symbolová rychlost.", "To je jiný parametr."], pts: 1.5 },
+    { id: "Pr_06", q: "Pro 1. Fresnelovu zónu u MW spoje platí:", opts: ["Při 60% volnosti je útlum zanedbatelný", "Má tvar rotačního elipsoidu", "Její poloměr roste se čtvercem frekvence", "Je to oblast, kde se šíří většina energie"], ans: [0, 1, 3], hint: "Překážka v zóně způsobí útlum.", tips: ["Pravidlo 60 %.", "Geometrický tvar.", "Lež, s rostoucí f klesá.", "Fyzikální podstata."], pts: 2.0 },
+    { id: "Pr_02", q: "Mezi zdroje nejistoty typu B patří:", opts: ["Chyba odečítání na stupnici (paralaxa)", "Vliv okolní teploty", "Znalost kalibračních konstant", "Opakovatelnost měření v čase"], ans: [0, 1, 2], hint: "Typ B jsou vnější známé vlivy.", tips: ["Subjektivní vliv z dokumentu.", "Vnější podmínky.", "Známé parametry.", "To je Typ A."], pts: 1.5 },
+    { id: "Pr_03", q: "Trigger (spouštění) u osciloskopu zajišťuje:", opts: ["Stacionární a stabilní zobrazení periodického děje", "Synchronizaci časové základny se signálem", "Měření amplitudy signálu", "Ukládání dat na disk"], ans: [0, 1], hint: "Bez triggeru signál na obrazovce 'běhá'.", tips: ["Stabilita obrazu.", "Princip funkce.", "To dělá vertikál.", "To dělá SW/Paměť."], pts: 1.0 },
+    { id: "Pr_04", q: "Detektor typu 'Peak' na spektrálním analyzátoru:", opts: ["Zobrazuje maximální hodnotu v daném frekvenčním bodě", "Je vhodný pro měření sinusových signálů", "Vždy podhodnocuje úroveň šumu", "Zobrazuje průměrný výkon"], ans: [0, 1], hint: "Užitečný pro zachycení impulsních rušení.", tips: ["Definice Peak detektoru.", "Standard pro CW signály.", "Naopak, šum nadhodnocuje.", "To dělá RMS/Average."], pts: 1.5 },
+    { id: "Pr_05", q: "Kvadraturní modulace QAM používá pro přenos informace:", opts: ["Amplitudu", "Fázi", "Pouze frekvenci", "Pouze polarizaci"], ans: [0, 1], hint: "Kombinuje ASK a PSK.", tips: ["První složka QAM.", "Druhá složka QAM.", "To je FSK.", "To je v optice/anténách."], pts: 1.0 },
+    { id: "Pr_01", q: "Co tvoří základní řetězec digitálního měřicího systému?", opts: ["Senzor -> Úprava signálu -> A/D převodník -> Zpracování", "Baterie -> Žárovka -> Voltmetr", "Anténa -> Reproduktor -> Displej", "Oscilátor -> Směšovač -> Filtr"], ans: [0], hint: "Signál musí být převeden na čísla.", tips: ["Standardní blokové schéma.", "Nesmysl.", "Rádio.", "Superheterodynní přijímač."], pts: 1.0 },
+    { id: "Pr_02", q: "Absolutní chyba delta x se vypočítá jako:", opts: ["Naměřená hodnota - skutečná hodnota", "Skutečná hodnota - naměřená hodnota", "Naměřená hodnota / skutečná hodnota", "Z třídy přesnosti a rozsahu"], ans: [0, 3], hint: "Pozor na definici delta x = xm - xt.", tips: ["Základní definice.", "To by bylo xt - xm.", "To je relativní poměr.", "Výpočet z parametrů."], pts: 1.5 },
+    { id: "Pr_03", q: "Doba náběhu osciloskopu (rise time) omezuje:", opts: ["Měření strmých hran rychlých pulsů", "Maximální frekvenci, kterou lze zobrazit bez útlumu", "Jas stopy", "Velikost vnitřní paměti"], ans: [0, 1], hint: "tr = 0.35 / B.", tips: ["Fyzikální limit.", "Souvisí s šířkou pásma.", "Nesmysl.", "Nesmysl."], pts: 1.5 },
+    { id: "Pr_05", q: "Modulační index u AM (m) by neměl překročit 1 (100 %), protože:", opts: ["Dochází k přemodulování a zkreslení zprávy", "Zanizne nosná vlna", "Vznikají nekonečná postranní pásma", "Sníží se šum"], ans: [0, 1], hint: "Obálka signálu by překřížila osu.", tips: ["Informace je nečitelná.", "Matematicky nosná zmizí.", "To u FM, ne AM.", "Lež, šum se nemění."], pts: 1.5 },
+    { id: "Pr_04", q: "Rozmítaný spektrální analyzátor pracuje na principu:", opts: ["Superheterodynního přijímače", "Zobrazení Fourierovy řady analogově", "Přímého zesílení signálu", "Měření fázového závěsu"], ans: [0], hint: "Ladicí oscilátor mění MF kmitočet.", tips: ["Základní architektura.", "To je spektrální analýza.", "To by nefungovalo.", "PLL je jen část."], pts: 1.0 },
+    { id: "Pr_06", q: "Zisk antény (G) přímo ovlivňuje:", opts: ["Vyzářený výkon v daném směru (EIRP)", "Energetickou bilanci spoje", "Frekvenci vysílání", "Hmotnost stožáru"], ans: [0, 1], hint: "Zisk soustřeďuje energii do směru.", tips: ["Směrovost zvyšuje EIRP.", "Více zisku = delší dosah.", "Anténa frekvenci nemění.", "Pouze nepřímo mechanicky."], pts: 1.5 },
+    { id: "Pr_02", q: "Standardní nejistota typu A (uA) klesá s:", opts: ["Rostoucím počtem měření (n)", "Lepší třídou přesnosti přístroje", "Kvalitnější kalibrací", "Zvětšením rozsahu"], ans: [0], hint: "Vychází ze směrodatné odchylky průměru.", tips: ["uA = s / odmocnina(n).", "To ovlivňuje uB.", "To ovlivňuje uB.", "To naopak chybu zvyšuje."], pts: 1.0 },
+    { id: "Pr_04", q: "Při měření 'AM hloubky modulace' na spektráku vidíme:", opts: ["Nosnou a dvě postranní čáry", "Amplitudu zprávy v dB vůči nosné", "Konstelační diagram", "Pouze nosnou"], ans: [0, 1], hint: "Vzdálenost postranních čar odpovídá modulační frekvenci.", tips: ["Typické AM spektrum.", "Rozdíl v dB dává index m.", "To u digitálních modulací.", "To u nemodulované nosné."], pts: 1.5 },
+    { id: "Pr_03", q: "Vstupní impedance osciloskopu je typicky:", opts: ["1 MOhm paralelně s jednotkami pF", "50 Ohm pro vf měření", "0 Ohm", "10 GOhm"], ans: [0, 1], hint: "Záleží na aplikaci (standard vs. vf).", tips: ["Standardní vstup.", "Přizpůsobený vstup.", "To je ampérmetr.", "To je elektrometrický zesilovač."], pts: 1.0 },
+    { id: "Pr_05", q: "Fázový šum (Phase Noise) se u oscilátoru projevuje jako:", opts: ["Rozšíření paty spektrální čáry nosné", "Jitter v časové doméně", "Změna barvy signálu", "Ztráta amplitudy"], ans: [0, 1], hint: "Krátkodobá nestabilita frekvence.", tips: ["Vizuální projev na SA.", "Projev na osciloskopu.", "Nesmysl.", "Nesmysl."], pts: 1.5 }
+];
+
+let data = [], curScore = 0, maxPosScore = 0, solved = 0;
+
+function shuffle(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+    }
+    return array;
+}
+
+function start() {
+    const qS = document.getElementById('shufQ').checked, aS = document.getElementById('shufA').checked;
+    data = JSON.parse(JSON.stringify(master));
+    if(qS) shuffle(data);
+    if(aS) data.forEach(d => {
+        let os = d.opts.map((o,i) => ({t:o, c:d.ans.includes(i), tip: d.tips[i]}));
+        shuffle(os);
+        d.opts = os.map(o => o.t); 
+        d.tips = os.map(o => o.tip);
+        d.ans = os.reduce((a,o,i) => {if(o.c) a.push(i); return a;}, []);
+    });
+    document.getElementById('setup').style.display = 'none';
+    renderNav(); renderQuiz();
+}
+
+function renderNav() {
+    const g = document.getElementById('navGrid');
+    data.forEach((_, i) => {
+        let d = document.createElement('div');
+        d.className = 'nav-item'; d.id = `nav-${i}`;
+        d.innerText = i + 1;
+        d.onclick = () => document.getElementById(`qcard-${i}`).scrollIntoView({behavior:'smooth'});
+        g.appendChild(d);
+    });
+}
+
+function renderQuiz() {
+    const c = document.getElementById('quiz');
+    data.forEach((d, i) => {
+        let isM = d.ans.length > 1;
+        let card = document.createElement('div');
+        card.className = 'q-card'; card.id = `qcard-${i}`;
+        card.innerHTML = `
+            <div class="q-header">
+                <div style="display:flex; align-items:center; gap:8px">
+                    <span class="blue-sq-icon" id="sq-${i}" onclick="toggleSquare(${i})"></span>
+                    <span class="q-title" id="num-display-${i}">Otázka číslo ${i+1} (${d.id})</span>
+                </div>
+                <div style="color:var(--primary); font-weight:bold; font-size:0.85em">${d.pts.toFixed(2)} b</div>
+            </div>
+            <div style="margin-bottom:12px; font-size:0.95em">${d.q}</div>
+            <div id="opts-${i}">
+                ${d.opts.map((o,oi) => `
+                    <label class="opt-label" id="label-${i}-${oi}">
+                        <input type="${isM?'checkbox':'radio'}" name="q${i}" value="${oi}">
+                        <span>${o}</span>
+                    </label>
+                    <div class="rationale-box" id="rat-${i}-${oi}">${d.tips[oi]}</div>
+                `).join('')}
+            </div>
+            <div class="hint-box" id="hint-${i}">${d.hint}</div>
+            <div class="btn-row">
+                <button class="action-btn hint-btn" id="hbtn-${i}" onclick="showHint(${i})">Nápověda</button>
+                <button class="action-btn check-btn" id="btn-${i}" onclick="check(${i})">Odevzdat</button>
+            </div>
+            <div id="feedback-${i}" style="margin-top:10px; font-weight:bold; font-size:0.85em; display:none"></div>
+        `;
+        c.appendChild(card);
+    });
+}
+
+function showHint(i) {
+    document.getElementById(`hint-${i}`).style.display = 'block';
+    document.getElementById(`hbtn-${i}`).disabled = true;
+}
+
+function toggleSquare(i) {
+    const icon = document.getElementById(`sq-${i}`);
+    const navItem = document.getElementById(`nav-${i}`);
+    const numDisplay = document.getElementById(`num-display-${i}`);
+    icon.classList.toggle('active');
+    navItem.classList.toggle('flagged');
+    const isAct = icon.classList.contains('active');
+    navItem.innerText = isAct ? '?' : i + 1;
+    numDisplay.innerText = isAct ? `Otázka číslo ? (${data[i].id})` : `Otázka číslo ${i+1} (${data[i].id})`;
+}
+
+function check(i) {
+    const d = data[i], block = document.getElementById(`opts-${i}`);
+    const sel = Array.from(block.querySelectorAll('input:checked')).map(n => parseInt(n.value));
+    if(!sel.length) return alert("Vyberte odpověď!");
+
+    document.getElementById(`btn-${i}`).disabled = true;
+    block.querySelectorAll('input').forEach(inp => inp.disabled = true);
+
+    let correctCount = 0, wrongCount = 0;
+    d.ans.forEach(a => { if(sel.includes(a)) correctCount++; });
+    sel.forEach(s => { if(!d.ans.includes(s)) wrongCount++; });
+
+    let gain = (correctCount - wrongCount) * (d.pts / d.ans.length);
+    if(gain < 0) gain = 0;
+    
+    curScore += gain; maxPosScore += d.pts; solved++;
+
+    d.opts.forEach((_, oi) => {
+        const rat = document.getElementById(`rat-${i}-${oi}`);
+        rat.style.display = 'block';
+        const label = document.getElementById(`label-${i}-${oi}`);
+        if(d.ans.includes(oi)) {
+            label.classList.add('correct');
+            rat.style.color = '#1e8e3e';
+        } else if(sel.includes(oi)) {
+            label.classList.add('wrong');
+            rat.style.color = '#d93025';
+        }
+    });
+
+    const feed = document.getElementById(`feedback-${i}`);
+    feed.style.display = 'block';
+    feed.innerText = `Získáno ${gain.toFixed(2)} z ${d.pts.toFixed(2)} b`;
+    feed.style.color = gain === d.pts ? '#1e8e3e' : '#d93025';
+
+    let nav = document.getElementById(`nav-${i}`);
+    nav.classList.add(gain === d.pts ? 'status-green' : 'status-red');
+
+    document.getElementById('prog').innerText = `Zodpovězeno: ${solved} / 40`;
+    document.getElementById('score').innerText = `Body: ${curScore.toFixed(2)} / ${maxPosScore.toFixed(2)}`;
+}
+</script>
+</body>
+</html>

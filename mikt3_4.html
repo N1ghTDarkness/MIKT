@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <title>Zkouškový simulátor - WPAN a WLAN</title>
+    <style>
+        :root { --primary: #1a73e8; --bg: #f8f9fa; --text: #202124; --blue-square: #007bff; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); margin: 0; display: flex; height: 100vh; overflow: hidden; }
+        
+        #sidebar { width: 280px; background: #fff; border-right: 1px solid #dadce0; display: flex; flex-direction: column; padding: 20px; overflow-y: auto; }
+        .nav-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 20px; }
+        .nav-item { width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; border: 1px solid #dadce0; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+        .nav-item.flagged { background: var(--blue-square) !important; color: white; border-color: var(--blue-square); }
+        .status-green { background: #e6f4ea; color: #1e8e3e; border-color: #ceead6; }
+        .status-orange { background: #fff4e5; color: #d97706; border-color: #ffe0b2; }
+        .status-red { background: #fce8e6; color: #d93025; border-color: #fad2cf; }
+
+        #main-content { flex: 1; padding: 40px; overflow-y: auto; scroll-behavior: smooth; }
+        .header-stats { position: sticky; top: -40px; background: var(--primary); color: white; padding: 20px; border-radius: 0 0 15px 15px; margin: -40px -40px 30px -40px; display: flex; justify-content: space-between; z-index: 100; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        
+        .q-card { background: #fff; border-radius: 12px; padding: 30px; margin-bottom: 40px; border: 1px solid #dadce0; }
+        .q-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 15px; }
+        
+        .blue-sq-icon { width: 20px; height: 20px; background: var(--blue-square); display: inline-block; cursor: pointer; border-radius: 3px; opacity: 0.3; }
+        .blue-sq-icon.active { opacity: 1; }
+
+        .opt-label { display: flex; align-items: flex-start; padding: 15px; border: 2px solid #eee; border-radius: 10px; margin-bottom: 10px; cursor: pointer; transition: 0.1s; }
+        .opt-label:hover { border-color: var(--primary); background: #f8fbff; }
+        .opt-label input { margin-right: 15px; margin-top: 5px; transform: scale(1.2); }
+        
+        .correct { background: #e6f4ea !important; border-color: #34a853 !important; }
+        .wrong { background: #fce8e6 !important; border-color: #ea4335 !important; }
+        
+        .check-btn { width: 100%; padding: 15px; background: #2c3e50; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; margin-top: 15px; }
+        .points-feedback { margin-top: 15px; font-weight: bold; padding: 15px; border-radius: 8px; display: none; line-height: 1.5; }
+        .hint-box { margin-top: 10px; font-weight: normal; color: #555; font-style: italic; border-top: 1px solid rgba(0,0,0,0.1); padding-top: 10px; }
+
+        #setup { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 1000; display: flex; align-items: center; justify-content: center; color: white; }
+        .setup-card { background: #202124; padding: 40px; border-radius: 20px; max-width: 450px; width: 90%; text-align: center; border: 1px solid #3c4043; }
+    </style>
+</head>
+<body>
+
+<div id="setup">
+    <div class="setup-card">
+        <h2>MIKT 3 a 4</h2>
+        <p>Tady je dalších 40 zkušebních otázek (20 pro každý okruh) vytvořených na základě tvých přednášek o osciloskopech (Okruh 03) a spektrálních analyzátorech (Okruh 04).</p>
+        <div style="text-align:left; margin: 20px 0;">
+            <label><input type="checkbox" id="shufQ"> Náhodné pořadí úloh</label><br><br>
+            <label><input type="checkbox" id="shufA"> Náhodné pořadí odpovědí</label>
+        </div>
+        <button class="check-btn" onclick="start()">SPUSTIT TEST</button>
+    </div>
+</div>
+
+<div id="sidebar">
+    <h3>Navigace</h3>
+    <div id="navGrid" class="nav-grid"></div>
+</div>
+
+<div id="main-content">
+    <div class="header-stats">
+        <div id="prog">Zodpovězeno: 0 / 40</div>
+        <div id="score">Body: 0,00 / 0,00</div>
+    </div>
+    <div id="quiz"></div>
+</div>
+
+<script>
+const master = [
+    // OKRUH 03: OSCILOSKOPY A MĚŘENÍ V ICT (20 otázek)
+    { id: 1, q: "Základní funkcí osciloskopu je zobrazení dvourozměrného grafu:", opts: ["Napětí (osa Y) v závislosti na čase (osa X)", "Výkonu (osa Y) v závislosti na frekvenci (osa X)", "Proudu (osa Y) v závislosti na odporu (osa X)", "Fáze (osa Y) v závislosti na teplotě (osa X)"], ans: [0], pts: 1.0, hint: "Časová oblast.", rationale: "Osciloskop zobrazuje časový průběh napěťového signálu[cite: 7]." },
+    { id: 2, q: "Který parametr osciloskopu udává nejvyšší frekvenci, kterou je přístroj schopen zpracovat s poklesem o 3 dB?", opts: ["Vzorkovací rychlost", "Vertikální rozlišení", "Frekvenční šířka pásma (Bandwidth)", "Hloubka paměti"], ans: [2], pts: 1.0, hint: "Mezní kmitočet.", rationale: "Šířka pásma definuje frekvenční rozsah, ve kterém osciloskop měří s přijatelnou ztrátou amplitudy[cite: 7]." },
+    { id: 3, q: "Vzorkovací rychlost (Sampling Rate) digitálního osciloskopu se udává v jednotkách:", opts: ["Hertz [Hz]", "Vzorky za sekundu [Sa/s]", "Bity [bit]", "Volty [V]"], ans: [1], pts: 1.0, hint: "Počet bodů za čas.", rationale: "Udává, kolikrát za sekundu A/D převodník digitalizuje vstupní signál[cite: 7]." },
+    { id: 4, q: "Co vyjadřuje 'Hloubka paměti' (Memory Depth) u osciloskopu?", opts: ["Maximální napětí, které lze uložit", "Počet bodů (vzorků), které může osciloskop uchovat pro jeden záznam", "Fyzickou velikost pevného disku v přístroji", "Počet barev displeje"], ans: [1], pts: 1.0, hint: "Kapacita pro vzorky.", rationale: "Hloubka paměti určuje, jak dlouhý časový úsek lze zachytit při daném vzorkování[cite: 7]." },
+    { id: 5, q: "K čemu slouží funkce 'Trigger' (Spouštění) u osciloskopu?", opts: ["K nastavení jasu displeje", "Ke stabilizaci zobrazení periodických dějů a zachycení anomálií", "K automatickému vypnutí přístroje při přehřátí", "K měření vnitřního odporu zdroje"], ans: [1], pts: 1.0, hint: "Synchronizace.", rationale: "Trigger definuje podmínku, při které začne osciloskop vykreslovat signál, což stabilizuje obraz[cite: 7]." },
+    { id: 6, q: "Mezi základní typy spouštění (Trigger) patří:", opts: ["Hrana (Edge)", "Šířka pulzu (Pulse Width)", "Logický stav", "Všechny uvedené možnosti"], ans: [3], pts: 1.0, hint: "Podmínky spuštění.", rationale: "Moderní osciloskopy umožňují spouštění na hranu, šířku pulzu, video signál i logické vzory[cite: 7]." },
+    { id: 7, q: "Vertikální rozlišení osciloskopu (např. 8 bitů nebo 12 bitů) určuje:", opts: ["Počet vertikálních kanálů", "Přesnost v ose napětí (počet úrovní kvantování)", "Maximální frekvenci signálu", "Rychlost překreslování displeje"], ans: [1], pts: 1.0, hint: "A/D převodník.", rationale: "Vyšší počet bitů znamená jemnější rozlišení změn napětí[cite: 7]." },
+    { id: 8, q: "Funkce 'Roll mode' u osciloskopu je užitečná pro:", opts: ["Sledování velmi rychlých dějů (GHz)", "Sledování pomalých dějů, kdy signál plynule 'ubíhá' po displeji", "Automatické mazání paměti", "Změnu barvy signálu"], ans: [1], pts: 1.0, hint: "Pomalý záznam.", rationale: "Roll mode se používá při nízkých rychlostech časové základny pro kontinuální sledování signálu[cite: 7]." },
+    { id: 9, q: "Co znamená zkratka DSO?", opts: ["Digital Storage Oscilloscope", "Dual Signal Operator", "Direct Sample Output", "Data System Optimizer"], ans: [0], pts: 1.0, hint: "Anglický název.", rationale: "DSO je standardní označení pro číslicový paměťový osciloskop[cite: 7]." },
+    { id: 10, q: "Smíšený osciloskop (MSO - Mixed Signal Oscilloscope) kombinuje:", opts: ["Osciloskop a multimetr", "Analogové kanály osciloskopu a digitální kanály logického analyzátoru", "Vysílač a přijímač", "Dva různé displeje"], ans: [1], pts: 1.0, hint: "Analog + Digital.", rationale: "MSO umožňuje současně sledovat analogové průběhy i logické stavy digitálních sběrnic[cite: 7]." },
+    { id: 11, q: "Jaký vliv má použití sondy 10:1 oproti 1:1?", opts: ["Sonda 10:1 zvyšuje vstupní odpor a snižuje zatížení měřeného obvodu", "Sonda 10:1 desetinásobně zrychluje měření", "Sonda 10:1 se používá pouze pro měření teploty", "Žádný, je to jen marketing"], ans: [0], pts: 1.0, hint: "Vstupní impedance.", rationale: "Dělicí sondy minimalizují ovlivnění (zatížení) měřeného signálu kapacitou a odporem přístroje[cite: 7]." },
+    { id: 12, q: "Matematické funkce osciloskopu (Math) umožňují například:", opts: ["Sčítání a odčítání kanálů", "Výpočet FFT (spektra)", "Integraci a derivaci signálu", "Všechny uvedené možnosti"], ans: [3], pts: 1.0, hint: "Zpracování signálu.", rationale: "Software osciloskopu dokáže s naměřenými daty provádět různé matematické operace v reálném čase[cite: 7]." },
+    { id: 13, q: "Pro analýzu sériových sběrnic (I2C, SPI, CAN) v ICT využíváme:", opts: ["Pouze voltmetr", "Sériové dekódování (Serial Decode) na osciloskopu", "Váhu", "Teploměr"], ans: [1], pts: 1.0, hint: "Čtení protokolu.", rationale: "Moderní osciloskopy umí převést napěťové úrovně sběrnic přímo na čitelné hexadecimální nebo ASCII hodnoty[cite: 7]." },
+    { id: 14, q: "Co je to 'Aliasing' u digitálního osciloskopu?", opts: ["Chyba zobrazení způsobená nedostatečným vzorkováním (nesplnění Shannonova teorému)", "Automatické vyhlazování hran", "Typ konektoru na zadním panelu", "Název software pro PC"], ans: [0], pts: 1.0, hint: "Podvzorkování.", rationale: "Pokud je vzorkování příliš pomalé, zobrazí osciloskop signál s chybnou (mnohem nižší) frekvencí[cite: 7]." },
+    { id: 15, q: "Který ovládací prvek mění měřítko na ose X (čas)?", opts: ["Volts/div", "Position", "Time/div (Horizontal scale)", "Trigger Level"], ans: [2], pts: 1.0, hint: "Horizontální nastavení.", rationale: "Ovladačem Time/div určujeme, jaký časový úsek představuje jeden dílek na mřížce displeje[cite: 7]." },
+    { id: 16, q: "Který ovládací prvek mění měřítko na ose Y (napětí)?", opts: ["Volts/div (Vertical scale)", "Seconds/div", "Slope", "Intensity"], ans: [0], pts: 1.0, hint: "Vertikální nastavení.", rationale: "Ovladačem Volts/div nastavujeme zesílení vertikálního zesilovače pro daný kanál[cite: 7]." },
+    { id: 17, q: "V ICT měření se 'Eye diagram' (Oční diagram) používá k:", opts: ["Měření dioptrií technika", "Posouzení kvality a integrity digitálního signálu", "Nastavení jasu monitoru", "Měření vlhkosti"], ans: [1], pts: 1.0, hint: "Kvalita dat.", rationale: "Oční diagram vzniká překryvem mnoha bitů a ukazuje šum, jitter a stabilitu logických úrovní[cite: 7]." },
+    { id: 18, q: "Co vyjadřuje parametr 'Waveform Update Rate'?", opts: ["Rychlost přenosu dat do PC", "Počet průběhů zachycených a zobrazených za sekundu", "Dobu nabíjení baterie", "Frekvenci procesoru"], ans: [1], pts: 1.0, hint: "Rychlost překreslování.", rationale: "Vysoká rychlost aktualizace zvyšuje pravděpodobnost zachycení náhodných, ojedinělých chyb v signálu[cite: 7]." },
+    { id: 19, q: "K čemu slouží funkce 'Auto-set'?", opts: ["K automatickému smazání dat", "K automatickému nastavení vertikálního a horizontálního měřítka podle vstupního signálu", "K vypnutí všech kanálů", "K přihlášení uživatele"], ans: [1], pts: 1.0, hint: "Rychlé nastavení.", rationale: "Auto-set je pomocná funkce pro rychlé nalezení a zobrazení neznámého signálu[cite: 7]." },
+    { id: 10, q: "Sonda v režimu 10:1 vyžaduje u osciloskopu:", opts: ["Nastavení koeficientu útlumu (Probe attenuation) na 10x pro správné zobrazení hodnot", "Použití externího zdroje 10V", "Desetkrát tlustší kabel", "Vypnutí všech ostatních kanálů"], ans: [0], pts: 1.0, hint: "Korekce zobrazení.", rationale: "Aby osciloskop ukazoval správné napětí, musí vědět, že sonda signál desetkrát zeslabila[cite: 7]." },
+
+    // OKRUH 04: SPEKTRÁLNÍ ANALYZÁTORY (20 otázek)
+    { id: 21, q: "Spektrální analyzátor zobrazuje signál v:", opts: ["Časové oblasti", "Frekvenční oblasti (Amplituda vs. Frekvence)", "Teplotní oblasti", "Statistické oblasti"], ans: [1], pts: 1.0, hint: "Osa X je kmitočet.", rationale: "Spektrální analyzátor rozkládá signál na jeho jednotlivé frekvenční složky[cite: 8]." },
+    { id: 22, q: "Základním principem klasického spektrálního analyzátoru je:", opts: ["Voltmetr s přepínačem", "Superheterodynní přijímač s rozmítaným filtrem", "Digitální kalkulačka", "Termočlánek"], ans: [1], pts: 1.0, hint: "Míchání frekvencí.", rationale: "Využívá se směšování vstupního signálu s rozmítaným lokálním oscilátorem (LO)[cite: 8]." },
+    { id: 23, q: "Co znamená zkratka RBW (Resolution Bandwidth)?", opts: ["Rychlost běhu procesoru", "Šířka pásma rozlišovacího filtru", "Rozsah barev displeje", "Rychlost zápisu do paměti"], ans: [1], pts: 1.0, hint: "Selektivita.", rationale: "RBW určuje schopnost analyzátoru rozlišit dvě blízké frekvenční složky[cite: 8]." },
+    { id: 24, q: "Jaký vliv má zúžení RBW na měření?", opts: ["Zrychluje měření", "Snižuje úroveň zobrazeného šumu a umožňuje rozlišit blízké signály", "Zvyšuje chybu měření", "Vypíná vstupní zeslabovač"], ans: [1], pts: 1.0, hint: "Šumové dno.", rationale: "Užší RBW propouští méně šumového výkonu, což zlepšuje citlivost přístroje[cite: 8]." },
+    { id: 25, q: "Co vyjadřuje parametr SPAN?", opts: ["Celkový frekvenční rozsah zobrazený na displeji", "Dobu trvání jednoho vzorku", "Maximální povolený výkon na vstupu", "Napětí baterie"], ans: [0], pts: 1.0, hint: "Frekvenční okno.", rationale: "Span definuje rozdíl mezi počáteční a koncovou frekvencí na obrazovce[cite: 8]." },
+    { id: 26, q: "K čemu slouží VBW (Video Bandwidth) filtr?", opts: ["K nastavení hlasitosti", "K vyhlazení (zprůměrování) šumu na displeji", "K přenosu obrazu do televize", "K ochraně před bleskem"], ans: [1], pts: 1.0, hint: "Vyhlazení stopy.", rationale: "VBW je dolní propust za detektorem, která potlačuje kmitání šumové stopy[cite: 8]." },
+    { id: 27, q: "Co se stane, pokud nastavíme příliš krátký čas rozmítání (Sweep Time) při úzkém RBW?", opts: ["Přístroj se restartuje", "Zobrazení bude chybné (nezkalibrované) a amplituda signálu klesne", "Měření bude přesnější", "Změní se barva pozadí"], ans: [1], pts: 1.0, hint: "Doba odezvy filtru.", rationale: "Filtr RBW potřebuje určitý čas k ustálení; příliš rychlé rozmítání vede k chybám v amplitudě i frekvenci[cite: 8]." },
+    { id: 28, q: "Hlavním úkolem vstupního atenuátoru (zeslabovače) je:", opts: ["Zvýšit hlasitost signálu", "Chránit směšovač před přetížením a poškozením", "Změnit frekvenci signálu", "Uložit data do cloudu"], ans: [1], pts: 1.0, hint: "Ochrana vstupu.", rationale: "Vstupní dělič upravuje úroveň signálu tak, aby nedošlo k nelineárnímu zkreslení v prvním směšovači[cite: 8]." },
+    { id: 29, q: "Jednotka [dBm] vyjadřuje výkon vztažený k:", opts: ["1 Watt", "1 miliwatt", "1 mikrovolt", "Šumu pozadí"], ans: [1], pts: 1.0, hint: "Logaritmické měřítko.", rationale: "0 dBm odpovídá výkonu 1 mW na definované impedanci (typicky 50 ohmů)[cite: 8]." },
+    { id: 30, q: "Real-time spektrální analyzátor (RTSA) se liší od klasického tím, že:", opts: ["Je levnější", "Dokáže zachytit i velmi krátké, ojedinělé signály bez mezer v čase (pomocí FFT)", "Nemá žádné filtry", "Pracuje pouze v noci"], ans: [1], pts: 1.0, hint: "Analýza bez mezer.", rationale: "RTSA zpracovává signál kontinuálně a dokáže zachytit děje, které klasický rozmítaný přístroj mine[cite: 8]." },
+    { id: 31, q: "V ICT se spektrální analyzátory používají pro:", opts: ["Analýzu obsazenosti WiFi pásem a rušení", "Měření emisí rádioých zařízení", "Ladění filtrů a zesilovačů", "Všechny uvedené možnosti"], ans: [3], pts: 1.0, hint: "Všestranné využití v RF.", rationale: "Jsou nezbytné pro diagnostiku a monitorování jakékoliv rádioé komunikace[cite: 8]." },
+    { id: 32, q: "Funkce 'Max Hold' na spektrálním analyzátoru slouží k:", opts: ["Smazání všech dat", "Zachování a zobrazení maximálních hodnot signálu za určitý čas", "Změně vertikálního měřítka na lineární", "Uzamčení klávesnice"], ans: [1], pts: 1.0, hint: "Paměť špiček.", rationale: "Užitečné pro sledování kolísajících signálů nebo hledání maximálního rušení[cite: 8]." },
+    { id: 33, q: "DANL (Displayed Average Noise Level) udává:", opts: ["Maximální vysílací výkon", "Vlastní šumové dno analyzátoru (citlivost)", "Rychlost procesoru", "Hloubku modulace"], ans: [1], pts: 1.0, hint: "Nejnižší měřitelný signál.", rationale: "DANL určuje nejmenší úroveň signálu, kterou lze odlišit od šumu přístroje[cite: 8]." },
+    { id: 34, q: "Reference Level (Referenční úroveň) na analyzátoru určuje:", opts: ["Nejnižší frekvenci", "Horní hranici (úroveň) zobrazenou na horním okraji mřížky", "Čas spuštění měření", "Název měřené stanice"], ans: [1], pts: 1.0, hint: "Vertikální posun.", rationale: "Nastavením Ref Level optimalizujeme zobrazení signálu na displeji bez přebuzení[cite: 8]." },
+    { id: 35, q: "FFT analyzátor (Fast Fourier Transform) pracuje na principu:", opts: ["Mechanického ladění filtru", "Matematického výpočtu spektra z časového vzorku signálu", "Chemické reakce", "Optického lomu"], ans: [1], pts: 1.0, hint: "Digitální výpočet.", rationale: "FFT převádí digitalizovaný signál z časové oblasti do frekvenční pomocí algoritmu[cite: 8]." },
+    { id: 36, q: "Který parametr spektrálního analyzátoru NEJVÍCE ovlivňuje rychlost měření?", opts: ["Barva stopy", "Nastavení RBW (užší RBW = pomalejší Sweep)", "Jas displeje", "Typ napájecího kabelu"], ans: [1], pts: 1.0, hint: "Doba rozmítání.", rationale: "Sweep time je nepřímo úměrný čtverci RBW; čím užší filtr, tím déle trvá přejetí pásma[cite: 8]." },
+    { id: 37, q: "Zkratka EMI v souvislosti s měřením spektra znamená:", opts: ["Electromagnetic Interference (elektromagnetické rušení)", "Electronic Memory Interface", "External Modern Integration", "Emergency Mode Indicator"], ans: [0], pts: 1.0, hint: "Rušení.", rationale: "Spektrální analyzátory jsou klíčové pro testování elektromagnetické kompatibility zařízení[cite: 8]." },
+    { id: 38, q: "Pojem 'Marker' (Značka) na spektrálním analyzátoru slouží k:", opts: ["Kreslení na displej fixem", "Přesnému odečtu frekvence a amplitudy v konkrétním bodě", "Změně vstupní impedance", "Vypnutí podsvícení"], ans: [1], pts: 1.0, hint: "Bodový odečet.", rationale: "Markery umožňují technikovi přesně změřit parametry vybraného vrcholu (peaku) signálu[cite: 8]." },
+    { id: 39, q: "Co je to 'Phase Noise' (Fázový šum)?", opts: ["Hluk větráku v přístroji", "Krátkodobá nestabilita frekvence oscilátoru projevující se jako 'sukně' u signálu", "Změna barvy signálu", "Úplné přerušení komunikace"], ans: [1], pts: 1.0, hint: "Čistota nosné.", rationale: "Fázový šum limituje schopnost přístroje měřit slabé signály v těsné blízkosti silných nosných[cite: 8]." },
+    { id: 40, q: "Pro měření v pásmu 2,4 GHz a 5 GHz (WiFi) potřebujeme analyzátor s šířkou pásma minimálně:", opts: ["1 MHz", "100 kHz", "6 GHz", "1 kHz"], ans: [2], pts: 1.0, hint: "Pracovní frekvence ICT.", rationale: "Analyzátor musí pokrýt frekvence, na kterých dané technologie pracují[cite: 8]." }
+];
+
+let data = [], curScore = 0, maxPosScore = 0, solved = 0;
+
+function start() {
+    const qS = document.getElementById('shufQ').checked, aS = document.getElementById('shufA').checked;
+    data = JSON.parse(JSON.stringify(master));
+    if(qS) data.sort(() => Math.random() - 0.5);
+    if(aS) data.forEach(d => {
+        let os = d.opts.map((o,i) => ({t:o, c:d.ans.includes(i)}));
+        os.sort(() => Math.random() - 0.5);
+        d.opts = os.map(o => o.t); d.ans = os.reduce((a,o,i) => {if(o.c) a.push(i); return a;}, []);
+    });
+    document.getElementById('setup').style.display = 'none';
+    renderNav(); renderQuiz();
+}
+
+function renderNav() {
+    const g = document.getElementById('navGrid');
+    data.forEach((_, i) => {
+        let d = document.createElement('div');
+        d.className = 'nav-item'; d.id = `nav-${i}`;
+        d.innerText = i + 1;
+        d.onclick = () => document.getElementById(`qcard-${i}`).scrollIntoView({behavior:'smooth'});
+        g.appendChild(d);
+    });
+}
+
+function renderQuiz() {
+    const c = document.getElementById('quiz');
+    data.forEach((d, i) => {
+        let isM = d.ans.length > 1;
+        let card = document.createElement('div');
+        card.className = 'q-card'; card.id = `qcard-${i}`;
+        card.innerHTML = `
+            <div class="q-header">
+                <div class="q-id-box">
+                    <span class="blue-sq-icon" id="sq-${i}" onclick="toggleSquare(${i})"></span>
+                    <span id="num-display-${i}" style="font-weight:bold">${i+1}</span>
+                    <span style="color:#666; margin-left:10px">ID ${d.id}</span>
+                </div>
+                <div style="color:var(--primary); font-weight:bold">${d.pts} b</div>
+            </div>
+            <div style="margin-bottom:25px; line-height:1.4">${d.q}</div>
+            <div id="opts-${i}">
+                ${d.opts.map((o,oi) => `<label class="opt-label"><input type="${isM?'checkbox':'radio'}" name="q${i}" value="${oi}"><span>${o}</span></label>`).join('')}
+            </div>
+            <button class="check-btn" id="btn-${i}" onclick="check(${i})">ODEVZDAT ÚLOHU</button>
+            <div id="feedback-${i}" class="points-feedback"></div>
+        `;
+        c.appendChild(card);
+    });
+}
+
+function toggleSquare(i) {
+    const icon = document.getElementById(`sq-${i}`);
+    const navItem = document.getElementById(`nav-${i}`);
+    const numDisplay = document.getElementById(`num-display-${i}`);
+    icon.classList.toggle('active');
+    navItem.classList.toggle('flagged');
+    const isAct = icon.classList.contains('active');
+    navItem.innerText = isAct ? '?' : i + 1;
+    numDisplay.innerText = isAct ? '?' : i + 1;
+}
+
+function check(i) {
+    const d = data[i], block = document.getElementById(`opts-${i}`);
+    const sel = Array.from(block.querySelectorAll('input:checked')).map(n => parseInt(n.value));
+    if(!sel.length) return alert("Musíte vybrat odpověď!");
+
+    document.getElementById(`btn-${i}`).disabled = true;
+    block.querySelectorAll('input').forEach(inp => inp.disabled = true);
+
+    let correctCount = 0, wrongCount = 0;
+    d.ans.forEach(a => { if(sel.includes(a)) correctCount++; });
+    sel.forEach(s => { if(!d.ans.includes(s)) wrongCount++; });
+
+    let gain = (correctCount - wrongCount) * (d.pts / d.ans.length);
+    if(gain < 0) gain = 0;
+    
+    curScore += gain; maxPosScore += d.pts; solved++;
+
+    const feed = document.getElementById(`feedback-${i}`);
+    feed.style.display = 'block';
+    feed.innerHTML = `Získáno ${gain.toFixed(2)} z ${d.pts} b. <div class="hint-box"><strong>Odůvodnění:</strong> ${d.hint}</div>`;
+    feed.style.background = (gain >= d.pts * 0.99) ? '#e6f4ea' : gain > 0 ? '#fff4e5' : '#fce8e6';
+
+    let nav = document.getElementById(`nav-${i}`);
+    if(gain >= d.pts * 0.99) nav.classList.add('status-green');
+    else if(gain > 0) nav.classList.add('status-orange');
+    else nav.classList.add('status-red');
+
+    block.querySelectorAll('.opt-label').forEach((l, oi) => {
+        if(d.ans.includes(oi)) l.classList.add('correct');
+        else if(sel.includes(oi)) l.classList.add('wrong');
+    });
+
+    document.getElementById('prog').innerText = `Zodpovězeno: ${solved} / ${data.length}`;
+    document.getElementById('score').innerText = `Body: ${curScore.toFixed(2)} / ${maxPosScore.toFixed(2)}`;
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <title>Zkouškový simulátor - WPAN a WLAN</title>
+    <style>
+        :root { --primary: #1a73e8; --bg: #f8f9fa; --text: #202124; --blue-square: #007bff; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); margin: 0; display: flex; height: 100vh; overflow: hidden; }
+        
+        #sidebar { width: 280px; background: #fff; border-right: 1px solid #dadce0; display: flex; flex-direction: column; padding: 20px; overflow-y: auto; }
+        .nav-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 20px; }
+        .nav-item { width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; border: 1px solid #dadce0; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+        .nav-item.flagged { background: var(--blue-square) !important; color: white; border-color: var(--blue-square); }
+        .status-green { background: #e6f4ea; color: #1e8e3e; border-color: #ceead6; }
+        .status-orange { background: #fff4e5; color: #d97706; border-color: #ffe0b2; }
+        .status-red { background: #fce8e6; color: #d93025; border-color: #fad2cf; }
+
+        #main-content { flex: 1; padding: 40px; overflow-y: auto; scroll-behavior: smooth; }
+        .header-stats { position: sticky; top: -40px; background: var(--primary); color: white; padding: 20px; border-radius: 0 0 15px 15px; margin: -40px -40px 30px -40px; display: flex; justify-content: space-between; z-index: 100; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        
+        .q-card { background: #fff; border-radius: 12px; padding: 30px; margin-bottom: 40px; border: 1px solid #dadce0; }
+        .q-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 15px; }
+        
+        .blue-sq-icon { width: 20px; height: 20px; background: var(--blue-square); display: inline-block; cursor: pointer; border-radius: 3px; opacity: 0.3; }
+        .blue-sq-icon.active { opacity: 1; }
+
+        .opt-label { display: flex; align-items: flex-start; padding: 15px; border: 2px solid #eee; border-radius: 10px; margin-bottom: 10px; cursor: pointer; transition: 0.1s; }
+        .opt-label:hover { border-color: var(--primary); background: #f8fbff; }
+        .opt-label input { margin-right: 15px; margin-top: 5px; transform: scale(1.2); }
+        
+        .correct { background: #e6f4ea !important; border-color: #34a853 !important; }
+        .wrong { background: #fce8e6 !important; border-color: #ea4335 !important; }
+        
+        .check-btn { width: 100%; padding: 15px; background: #2c3e50; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; margin-top: 15px; }
+        .points-feedback { margin-top: 15px; font-weight: bold; padding: 15px; border-radius: 8px; display: none; line-height: 1.5; }
+        .hint-box { margin-top: 10px; font-weight: normal; color: #555; font-style: italic; border-top: 1px solid rgba(0,0,0,0.1); padding-top: 10px; }
+
+        #setup { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 1000; display: flex; align-items: center; justify-content: center; color: white; }
+        .setup-card { background: #202124; padding: 40px; border-radius: 20px; max-width: 450px; width: 90%; text-align: center; border: 1px solid #3c4043; }
+    </style>
+</head>
+<body>
+
+<div id="setup">
+    <div class="setup-card">
+        <h2>MIKT 5 a 6</h2>
+        <p>Tady je dalších 40 zkušebních otázek (20 pro každý okruh) vytvořených na základě tvých přednášek o digitálně modulovaných signálech (Okruh 05) a měření jejich parametrů (Okruh 06).</p>
+        <div style="text-align:left; margin: 20px 0;">
+            <label><input type="checkbox" id="shufQ"> Náhodné pořadí úloh</label><br><br>
+            <label><input type="checkbox" id="shufA"> Náhodné pořadí odpovědí</label>
+        </div>
+        <button class="check-btn" onclick="start()">SPUSTIT TEST</button>
+    </div>
+</div>
+
+<div id="sidebar">
+    <h3>Navigace</h3>
+    <div id="navGrid" class="nav-grid"></div>
+</div>
+
+<div id="main-content">
+    <div class="header-stats">
+        <div id="prog">Zodpovězeno: 0 / 40</div>
+        <div id="score">Body: 0,00 / 0,00</div>
+    </div>
+    <div id="quiz"></div>
+</div>
+
+<script>
+const master = [
+    // OKRUH 05: DIGITÁLNĚ MODULOVANÉ SIGNÁLY – ÚVOD (20 otázek)
+    { id: 1, q: "Co je hlavním cílem digitální modulace?", opts: ["Změnit barvu rádioých vln", "Přenést digitální symboly pomocí spojitého analogového signálu", "Zvýšit hmotnost vysílače", "Nahradit internet kabelem"], ans: [1], pts: 1.0, hint: "Převod bitů na vlny.", rationale: "Digitální modulace mapuje binární data na fyzické parametry nosné vlny (amplitudu, frekvenci, fázi)[cite: 13]." },
+    { id: 2, q: "Mezi základní typy digitálních modulací patří:", opts: ["ASK, FSK, PSK", "TCP, IP, UDP", "HTML, CSS, JS", "USB, SSD, RAM"], ans: [0], pts: 1.0, hint: "Zkratky podle měněného parametru.", rationale: "Základní metody jsou klíčování amplitudou (ASK), frekvencí (FSK) a fází (PSK)[cite: 13]." },
+    { id: 3, q: "Vícestavová modulace 16-QAM přenáší v jednom symbolu kolik bitů?", opts: ["2 bity", "4 bity", "8 bitů", "16 bitů"], ans: [1], pts: 1.0, hint: "2 na kolikátou je 16?", rationale: "Počet bitů na symbol se vypočítá jako log2(M), tedy log2(16) = 4[cite: 13]." },
+    { id: 4, q: "Konstelační diagram zobrazuje stavy modulace v rovině:", opts: ["XY", "IQ (In-phase a Quadrature)", "3D prostoru", "Polarizační"], ans: [1], pts: 1.0, hint: "Komplexní rovina.", rationale: "IQ diagram zobrazuje synfázní a kvadraturní složku modulovaného signálu[cite: 13]." },
+    { id: 5, q: "Který jev v analogové televizi způsoboval 'duchy' a dnes jej technologie jako MIMO využívají?", opts: ["Sluneční svit", "Vícecestné šíření signálu (odrazy)", "Nízká hlasitost", "Špatná anténa"], ans: [1], pts: 1.0, hint: "Signál přichází z více směrů.", rationale: "Vícecestné šíření způsobuje odrazy, které moderní systémy jako MIMO a OFDM využívají ke zvýšení kapacity[cite: 13]." },
+    { id: 6, q: "Technologie MIMO (Multiple-Input Multiple-Output) využívá:", opts: ["Více antén pro posílání více datových proudů naráz", "Pouze jednu velmi velkou anténu", "Míchání barev signálu", "Mechanické otáčení vysílače"], ans: [0], pts: 1.0, hint: "Více vstupů a výstupů.", rationale: "MIMO využívá vícecestné šíření a odrazy ve svůj prospěch pomocí soustavy antén[cite: 13]." },
+    { id: 7, q: "Modulace OFDM (Orthogonal Frequency Division Multiplexing) funguje na principu:", opts: ["Jedné velmi rychlé nosné", "Tisíců paralelních pomalých nosných", "Vypínání signálu v noci", "Pouze amplitudových změn"], ans: [1], pts: 1.0, hint: "Paralelní přenos.", rationale: "OFDM dělí rychlý datový tok na mnoho pomalých subnosných, což zvyšuje odolnost proti odrazům[cite: 13]." },
+    { id: 8, q: "V ICT se 256-QAM nejčastěji používá u:", opts: ["Pomalých senzorů", "Moderních sítí jako LTE-Advanced nebo Wi-Fi 5", "Pouze u Morseovy abecedy", "Analogových telefonů"], ans: [1], pts: 1.0, hint: "Vysokorychlostní data.", rationale: "Vícestavové modulace (256-QAM) umožňují vysoké přenosové rychlosti v moderních standardech[cite: 13]." },
+    { id: 9, q: "Co vyjadřuje 'Symbolová rychlost' (Symbol Rate)?", opts: ["Počet bitů za rok", "Počet změn stavu (symbolů) přenesených za sekundu", "Rychlost světla", "Hmotnost datového paketu"], ans: [1], pts: 1.0, hint: "Jednotka Baud.", rationale: "Symbolová rychlost určuje, kolik modulačních stavů se vystřídá na nosné za sekundu[cite: 13]." },
+    { id: 10, q: "Proč je 64-QAM citlivější na šum než QPSK?", opts: ["Má delší anténu", "Body v IQ diagramu jsou blíže u sebe", "Pracuje jen v zimě", "Přenáší méně bitů"], ans: [1], pts: 1.0, hint: "Hustota bodů v diagramu.", rationale: "U vícestavových modulací stačí menší úroveň šumu k tomu, aby se symbol 'přesunul' do oblasti jiného stavu[cite: 13]." },
+    { id: 11, q: "Mezi analogové modulace patří:", opts: ["AM, FM, PM", "QAM, PSK", "LTE, 5G", "IP, TCP"], ans: [0], pts: 1.0, hint: "Klasické rádio.", rationale: "Amplitudová, frekvenční a fázová modulace jsou základní analogové typy[cite: 13]." },
+    { id: 12, q: "Co znamená 'In-phase' složka v IQ modulaci?", opts: ["Složka s fázovým posuvem 90 stupňů", "Složka ve fázi s referenčním signálem", "Vypnutá složka", "Složka určující barvu"], ans: [1], pts: 1.0, hint: "Osa I.", rationale: "Složka I (In-phase) je v souladu s fází nosné vlny[cite: 13]." },
+    { id: 13, q: "Digitální modulace PSK mění u nosné vlny:", opts: ["Amplitudu", "Frekvenci", "Fázi", "Výkon"], ans: [2], pts: 1.0, hint: "Phase Shift Keying.", rationale: "PSK (Phase Shift Keying) kóduje informaci do skokových změn fáze[cite: 13]." },
+    { id: 14, q: "Která modulace se používá pro digitální rozhlas DAB?", opts: ["Pouze AM", "DQPSK s OFDM", "Jednoduchá FSK", "Vypínání nosné"], ans: [1], pts: 1.0, hint: "Kombinace fáze a mnoha nosných.", rationale: "DAB využívá diferenciální QPSK v kombinaci s ortogonálním multiplexem[cite: 13]." },
+    { id: 15, q: "Co způsobuje mezisymbolovou interferenci (ISI)?", opts: ["Příliš silná baterie", "Zpožděné příchody odražených signálů při vícecestném šíření", "Nízká cena kabelu", "Vypnutý monitor"], ans: [1], pts: 1.0, hint: "Překrývání symbolů.", rationale: "Odrazy signálu dorazí později a mohou se překrýt s následujícím vysílaným symbolem[cite: 13]." },
+    { id: 16, q: "Zkratka BPSK znamená:", opts: ["Binary Phase Shift Keying", "Basic Power System Kit", "Broadband Pulse Signal", "Bit Per Second Key"], ans: [0], pts: 1.0, hint: "Dvoustavová fázová modulace.", rationale: "BPSK je nejjednodušší fázová modulace se dvěma stavy (0 a 180 stupňů)[cite: 13]." },
+    { id: 17, q: "Kvadraturní složka 'Q' v IQ diagramu je vůči složce 'I' posunuta o:", opts: ["0 stupňů", "45 stupňů", "90 stupňů", "180 stupňů"], ans: [2], pts: 1.0, hint: "Pravý úhel.", rationale: "Složky I a Q jsou na sebe kolmé (ortogonální), což odpovídá posunu 90 stupňů[cite: 13]." },
+    { id: 18, q: "Vztah mezi přenosovou rychlostí (v_p) a modulační rychlostí (v_m) je:", opts: ["v_p = v_m * n (kde n je počet bitů na symbol)", "v_p = v_m / n", "v_p = v_m", "v_p = v_m^2"], ans: [0], pts: 1.0, hint: "Bity vs. symboly.", rationale: "Přenosová rychlost v bit/s je dána počtem symbolů za sekundu krát počet bitů v jednom symbolu[cite: 13]." },
+    { id: 19, q: "Hlavní výhodou digitální modulace oproti analogové je:", opts: ["Větší šum", "Vyšší odolnost proti rušení a možnost regenerace signálu", "Jednodušší antény", "Nižší frekvence"], ans: [1], pts: 1.0, hint: "0 a 1.", rationale: "Digitální signál lze v přijímači přesně zrekonstruovat a opravit pomocí samoopravných kódů[cite: 13]." },
+    { id: 20, q: "Oční diagram (Eye Diagram) na osciloskopu slouží k:", opts: ["Měření dioptrií", "Posouzení kvality digitálního signálu a míry rušení", "Zobrazení loga firmy", "Měření teploty procesoru"], ans: [1], pts: 1.0, hint: "Pohled na vrstvené bity.", rationale: "Rozevření 'oka' v diagramu indikuje úroveň šumu a časovou stabilitu (jitter) signálu[cite: 13]." },
+
+    // OKRUH 06: MĚŘENÍ PARAMETRŮ DIGITÁLNĚ MODULOVANÝCH SIGNÁLŮ (20 otázek)
+    { id: 21, q: "Který parametr vyjadřuje vektorovou chybu v IQ diagramu?", opts: ["SNR", "EVM (Error Vector Magnitude)", "BER", "THD"], ans: [1], pts: 1.0, hint: "Vzdálenost od ideálního bodu.", rationale: "EVM je klíčový parametr kvality digitální modulace, udává rozdíl mezi ideálním a skutečným symbolem[cite: 12]." },
+    { id: 22, q: "Jednotka EVM se nejčastěji udává v:", opts: ["Voltech", "Procentech [%] nebo decibelech [dB]", "Ampérech", "Metrech"], ans: [1], pts: 1.0, hint: "Relativní chyba.", rationale: "EVM se vyjadřuje jako poměr chybového vektoru k amplitudě referenčního symbolu[cite: 12]." },
+    { id: 23, q: "Bitová chybovost (BER - Bit Error Ratio) je definována jako:", opts: ["Poměr chybných bitů k celkovému počtu přenesených bitů", "Počet bitů za sekundu", "Výkon šumu", "Délka kabelu"], ans: [0], pts: 1.0, hint: "Kvalita přenosu.", rationale: "BER udává pravděpodobnost výskytu chyby v digitálním toku[cite: 12]." },
+    { id: 24, q: "Při měření digitálního spektra parametr ACPR (Adjacent Channel Power Ratio) udává:", opts: ["Výkon v hlavním kanálu", "Poměr výkonu v hlavním kanálu k výkonu pronikajícímu do sousedního kanálu", "Rychlost procesoru", "Hloubku paměti"], ans: [1], pts: 1.0, hint: "Rušení sousedů.", rationale: "ACPR měří nežádoucí vyzařování vysílače mimo přidělené frekvenční pásmo[cite: 12]." },
+    { id: 25, q: "Co znamená zkratka SDR v měřicí technice?", opts: ["Standard Data Record", "Software Defined Radio", "Simple Digital Receiver", "Super Dynamic Range"], ans: [1], pts: 1.0, hint: "Rádio definované softwarem.", rationale: "SDR systémy umožňují realizovat modulační a filtrační funkce pomocí softwarových algoritmů[cite: 12]." },
+    { id: 26, q: "Spektrogram (v měření spektra) zobrazuje:", opts: ["Vývoj spektra v čase (osa Y je čas, barva je výkon)", "Pouze aktuální výkon", "Statický obrázek antény", "Teplotu vysílače"], ans: [0], pts: 1.0, hint: "Vodopád.", rationale: "Spektrogram (waterfall) umožňuje sledovat proměnné nebo impulsní signály v čase[cite: 12]." },
+    { id: 27, q: "Který z těchto faktorů NEGATIVNĚ ovlivňuje EVM?", opts: ["Fázový šum a nelinearita zesilovačů", "Vysoký zisk antény", "Nízká teplota okolí", "Dlouhý název stanice"], ans: [0], pts: 1.0, hint: "Nedokonalosti hardwaru.", rationale: "Hardwarové chyby jako nelineární zkreslení nebo nestabilita hodin zvětšují modulační chybu[cite: 12]." },
+    { id: 28, q: "Pro měření digitálně modulovaných signálů je nezbytný:", opts: ["Analogový voltmetr", "VSA (Vector Signal Analyzer)", "Teploměr", "Mechanické počítadlo"], ans: [1], pts: 1.0, hint: "Analyzátor s IQ zpracováním.", rationale: "VSA dokáže digitalizovat IQ složky a provádět matematickou analýzu modulace[cite: 12]." },
+    { id: 29, q: "Šířka pásma obsazená signálem (Occupied Bandwidth) se měří jako:", opts: ["Pásmo obsahující 99 % celkového výkonu", "Vždy pevně 20 MHz", "Vzdálenost k nejbližší BTS", "Maximální frekvence oscilátoru"], ans: [0], pts: 1.0, hint: "Kde je většina energie?", rationale: "Tento parametr definuje frekvenční rozsah, ve kterém je soustředěna téměř veškerá energie vysílání[cite: 12]." },
+    { id: 30, q: "Při analýze 5G signálu měříme parametr 'Beamforming'. Ten slouží k:", opts: ["Měření váhy telefonu", "Nasměrování vyzařovacího paprsku antény k uživateli", "Změně barvy displeje", "Chlazení základnové stanice"], ans: [1], pts: 1.0, hint: "Tvarování paprsku.", rationale: "V 5G systémech se energie soustředí do úzkého směru pro zvýšení dosahu a kapacity[cite: 12]." },
+    { id: 31, q: "IQ offset (posun nuly) v konstelačním diagramu způsobuje:", opts: ["Změnu barvy bodů", "Pronikání nosné vlny (Carrier Leakage) do signálu", "Zvýšení přenosové rychlosti", "Vypnutí vysílače"], ans: [1], pts: 1.0, hint: "Chyba ve středu diagramu.", rationale: "IQ offset posouvá celé souhvězdí bodů mimo střed IQ roviny[cite: 12]." },
+    { id: 32, q: "Digitální demodulace vyžaduje proces zvaný 'Symbol Synchronization'. Co je jeho účelem?", opts: ["Snížení výkonu", "Určení správného okamžiku pro vzorkování každého symbolu", "Smazání paměti", "Naladění rádia"], ans: [1], pts: 1.0, hint: "Časování vzorků.", rationale: "Přijímač musí přesně vědět, kdy je modulační stav ustálený a připraven k odečtu[cite: 12]." },
+    { id: 33, q: "V měření parametrů ICT znamená zkratka MER:", opts: ["Modulation Error Ratio", "Memory Error Rate", "Mobile Entry Reset", "Multiple Edge Range"], ans: [0], pts: 1.0, hint: "Poměr modulační chyby.", rationale: "MER je v podstatě SNR digitálního signálu vyjádřené v IQ rovině[cite: 12]." },
+    { id: 34, q: "Parametr 'Quadrature Error' v IQ analýze vyjadřuje:", opts: ["Chybu v čase", "Odchylku od ideálního úhlu 90 stupňů mezi složkami I a Q", "Nízký výkon baterie", "Změnu kmitočtu"], ans: [1], pts: 1.0, hint: "Kolmost složek.", rationale: "Pokud nejsou I a Q přesně kolmé, dochází k deformaci konstelačního diagramu[cite: 12]." },
+    { id: 35, q: "Co je to 'Phase Jitter'?", opts: ["Náhodné kolísání fáze signálu v čase", "Změna hlasitosti", "Mechanické vibrování přístroje", "Počet barev obrazovky"], ans: [0], pts: 1.0, hint: "Fázový neklid.", rationale: "Jitter způsobuje 'rozmazání' bodů v IQ diagramu v kruhovém směru[cite: 12]." },
+    { id: 36, q: "Měření 'CCDF' u digitálních signálů se používá pro:", opts: ["Měření teploty kabelu", "Analýzu špičkového výkonu a pravděpodobnosti jeho výskytu", "Nastavení jasu", "Výpočet ceny za data"], ans: [1], pts: 1.0, hint: "Statistika výkonu.", rationale: "CCDF (Complementary Cumulative Distribution Function) pomáhá navrhovat výkonové zesilovače[cite: 12]." },
+    { id: 37, q: "V moderním měření parametrů využíváme standardy 5G-Advanced. Ty přinášejí:", opts: ["Snížení rychlosti", "Vylepšení v oblasti IoT, přesnosti polohy a efektivity", "Pouze analogové funkce", "Zákaz bezdrátových sítí"], ans: [1], pts: 1.0, hint: "Evoluce 5G.", rationale: "Standardy 5G-Advanced rozšiřují možnosti sítí o nové ICT funkce[cite: 12]." },
+    { id: 38, q: "Spektrální maska (Spectrum Emission Mask) určuje:", opts: ["Tvar antény", "Povolené limity vyzařování výkonu mimo hlavní kanál", "Barvu krytu vysílače", "Délku zprávy"], ans: [1], pts: 1.0, hint: "Limity v okolí kanálu.", rationale: "Maska definuje 'šablonu', do které se musí spektrum vysílaného signálu vejít, aby nerušilo okolí[cite: 12]." },
+    { id: 39, q: "Při analýze modulace OFDM měříme EVM pro:", opts: ["Pouze jednu nosnou", "Každou subnosnou zvlášť i průměr přes celý symbol", "Jen pro nejvyšší frekvenci", "Pouze v noci"], ans: [1], pts: 1.0, hint: "Mnoho malých nosných.", rationale: "Moderní analyzátory zobrazují kvalitu modulace napříč celým komplexním OFDM symbolem[cite: 12]." },
+    { id: 30, q: "Měření pomocí SDR (Software Defined Radio) je v ICT oblíbené pro:", opts: ["Vysokou váhu", "Flexibilitu, nízkou cenu a široké možnosti softwarové analýzy", "Nemožnost propojení s PC", "Pouze pro příjem FM rádia"], ans: [1], pts: 1.0, hint: "Univerzálnost.", rationale: "SDR platformy umožňují měřit a analyzovat téměř jakýkoliv digitální protokol pomocí počítače[cite: 12]." }
+];
+
+let data = [], curScore = 0, maxPosScore = 0, solved = 0;
+
+function start() {
+    const qS = document.getElementById('shufQ').checked, aS = document.getElementById('shufA').checked;
+    data = JSON.parse(JSON.stringify(master));
+    if(qS) data.sort(() => Math.random() - 0.5);
+    if(aS) data.forEach(d => {
+        let os = d.opts.map((o,i) => ({t:o, c:d.ans.includes(i)}));
+        os.sort(() => Math.random() - 0.5);
+        d.opts = os.map(o => o.t); d.ans = os.reduce((a,o,i) => {if(o.c) a.push(i); return a;}, []);
+    });
+    document.getElementById('setup').style.display = 'none';
+    renderNav(); renderQuiz();
+}
+
+function renderNav() {
+    const g = document.getElementById('navGrid');
+    data.forEach((_, i) => {
+        let d = document.createElement('div');
+        d.className = 'nav-item'; d.id = `nav-${i}`;
+        d.innerText = i + 1;
+        d.onclick = () => document.getElementById(`qcard-${i}`).scrollIntoView({behavior:'smooth'});
+        g.appendChild(d);
+    });
+}
+
+function renderQuiz() {
+    const c = document.getElementById('quiz');
+    data.forEach((d, i) => {
+        let isM = d.ans.length > 1;
+        let card = document.createElement('div');
+        card.className = 'q-card'; card.id = `qcard-${i}`;
+        card.innerHTML = `
+            <div class="q-header">
+                <div class="q-id-box">
+                    <span class="blue-sq-icon" id="sq-${i}" onclick="toggleSquare(${i})"></span>
+                    <span id="num-display-${i}" style="font-weight:bold">${i+1}</span>
+                    <span style="color:#666; margin-left:10px">ID ${d.id}</span>
+                </div>
+                <div style="color:var(--primary); font-weight:bold">${d.pts} b</div>
+            </div>
+            <div style="margin-bottom:25px; line-height:1.4">${d.q}</div>
+            <div id="opts-${i}">
+                ${d.opts.map((o,oi) => `<label class="opt-label"><input type="${isM?'checkbox':'radio'}" name="q${i}" value="${oi}"><span>${o}</span></label>`).join('')}
+            </div>
+            <button class="check-btn" id="btn-${i}" onclick="check(${i})">ODEVZDAT ÚLOHU</button>
+            <div id="feedback-${i}" class="points-feedback"></div>
+        `;
+        c.appendChild(card);
+    });
+}
+
+function toggleSquare(i) {
+    const icon = document.getElementById(`sq-${i}`);
+    const navItem = document.getElementById(`nav-${i}`);
+    const numDisplay = document.getElementById(`num-display-${i}`);
+    icon.classList.toggle('active');
+    navItem.classList.toggle('flagged');
+    const isAct = icon.classList.contains('active');
+    navItem.innerText = isAct ? '?' : i + 1;
+    numDisplay.innerText = isAct ? '?' : i + 1;
+}
+
+function check(i) {
+    const d = data[i], block = document.getElementById(`opts-${i}`);
+    const sel = Array.from(block.querySelectorAll('input:checked')).map(n => parseInt(n.value));
+    if(!sel.length) return alert("Musíte vybrat odpověď!");
+
+    document.getElementById(`btn-${i}`).disabled = true;
+    block.querySelectorAll('input').forEach(inp => inp.disabled = true);
+
+    let correctCount = 0, wrongCount = 0;
+    d.ans.forEach(a => { if(sel.includes(a)) correctCount++; });
+    sel.forEach(s => { if(!d.ans.includes(s)) wrongCount++; });
+
+    let gain = (correctCount - wrongCount) * (d.pts / d.ans.length);
+    if(gain < 0) gain = 0;
+    
+    curScore += gain; maxPosScore += d.pts; solved++;
+
+    const feed = document.getElementById(`feedback-${i}`);
+    feed.style.display = 'block';
+    feed.innerHTML = `Získáno ${gain.toFixed(2)} z ${d.pts} b. <div class="hint-box"><strong>Odůvodnění:</strong> ${d.hint}</div>`;
+    feed.style.background = (gain >= d.pts * 0.99) ? '#e6f4ea' : gain > 0 ? '#fff4e5' : '#fce8e6';
+
+    let nav = document.getElementById(`nav-${i}`);
+    if(gain >= d.pts * 0.99) nav.classList.add('status-green');
+    else if(gain > 0) nav.classList.add('status-orange');
+    else nav.classList.add('status-red');
+
+    block.querySelectorAll('.opt-label').forEach((l, oi) => {
+        if(d.ans.includes(oi)) l.classList.add('correct');
+        else if(sel.includes(oi)) l.classList.add('wrong');
+    });
+
+    document.getElementById('prog').innerText = `Zodpovězeno: ${solved} / ${data.length}`;
+    document.getElementById('score').innerText = `Body: ${curScore.toFixed(2)} / ${maxPosScore.toFixed(2)}`;
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <title>Zkouškový simulátor - WPAN a WLAN</title>
+    <style>
+        :root { --primary: #1a73e8; --bg: #f8f9fa; --text: #202124; --blue-square: #007bff; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); margin: 0; display: flex; height: 100vh; overflow: hidden; }
+        
+        #sidebar { width: 280px; background: #fff; border-right: 1px solid #dadce0; display: flex; flex-direction: column; padding: 20px; overflow-y: auto; }
+        .nav-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 20px; }
+        .nav-item { width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; border: 1px solid #dadce0; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+        .nav-item.flagged { background: var(--blue-square) !important; color: white; border-color: var(--blue-square); }
+        .status-green { background: #e6f4ea; color: #1e8e3e; border-color: #ceead6; }
+        .status-orange { background: #fff4e5; color: #d97706; border-color: #ffe0b2; }
+        .status-red { background: #fce8e6; color: #d93025; border-color: #fad2cf; }
+
+        #main-content { flex: 1; padding: 40px; overflow-y: auto; scroll-behavior: smooth; }
+        .header-stats { position: sticky; top: -40px; background: var(--primary); color: white; padding: 20px; border-radius: 0 0 15px 15px; margin: -40px -40px 30px -40px; display: flex; justify-content: space-between; z-index: 100; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        
+        .q-card { background: #fff; border-radius: 12px; padding: 30px; margin-bottom: 40px; border: 1px solid #dadce0; }
+        .q-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 15px; }
+        
+        .blue-sq-icon { width: 20px; height: 20px; background: var(--blue-square); display: inline-block; cursor: pointer; border-radius: 3px; opacity: 0.3; }
+        .blue-sq-icon.active { opacity: 1; }
+
+        .opt-label { display: flex; align-items: flex-start; padding: 15px; border: 2px solid #eee; border-radius: 10px; margin-bottom: 10px; cursor: pointer; transition: 0.1s; }
+        .opt-label:hover { border-color: var(--primary); background: #f8fbff; }
+        .opt-label input { margin-right: 15px; margin-top: 5px; transform: scale(1.2); }
+        
+        .correct { background: #e6f4ea !important; border-color: #34a853 !important; }
+        .wrong { background: #fce8e6 !important; border-color: #ea4335 !important; }
+        
+        .check-btn { width: 100%; padding: 15px; background: #2c3e50; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; margin-top: 15px; }
+        .points-feedback { margin-top: 15px; font-weight: bold; padding: 15px; border-radius: 8px; display: none; line-height: 1.5; }
+        .hint-box { margin-top: 10px; font-weight: normal; color: #555; font-style: italic; border-top: 1px solid rgba(0,0,0,0.1); padding-top: 10px; }
+
+        #setup { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 1000; display: flex; align-items: center; justify-content: center; color: white; }
+        .setup-card { background: #202124; padding: 40px; border-radius: 20px; max-width: 450px; width: 90%; text-align: center; border: 1px solid #3c4043; }
+    </style>
+</head>
+<body>
+
+<div id="setup">
+    <div class="setup-card">
+        <h2>MIKT 1 a 2</h2>
+        <p>Tady je 40 otázek (20 pro každý okruh) zpracovaných podle tvých posledních podkladů z předmětu Měření v ICT (Okruh 01 – Úvod do předmětu a Okruh 02 – Chyby a nejistoty měření).</p>
+        <div style="text-align:left; margin: 20px 0;">
+            <label><input type="checkbox" id="shufQ"> Náhodné pořadí úloh</label><br><br>
+            <label><input type="checkbox" id="shufA"> Náhodné pořadí odpovědí</label>
+        </div>
+        <button class="check-btn" onclick="start()">SPUSTIT TEST</button>
+    </div>
+</div>
+
+<div id="sidebar">
+    <h3>Navigace</h3>
+    <div id="navGrid" class="nav-grid"></div>
+</div>
+
+<div id="main-content">
+    <div class="header-stats">
+        <div id="prog">Zodpovězeno: 0 / 40</div>
+        <div id="score">Body: 0,00 / 0,00</div>
+    </div>
+    <div id="quiz"></div>
+</div>
+
+<script>
+const master = [
+    // OKRUH 01: ÚVOD DO PŘEDMĚTU MĚŘENÍ V ICT (20 otázek)
+    { id: 1, q: "Která starověká civilizace je spojována s položením základů metrologie při stavbě pyramid?", opts: ["Římané", "Řekové", "Egypťané", "Babyloňané"], ans: [2], pts: 1.0, hint: "Měření je historicky stará činnost.", rationale: "Základy metrologie a standardizace jednotek byly položeny v Egyptě při monumentálních stavbách[cite: 13]." },
+    { id: 2, q: "Kdo je považován za průkopníka kvantitativních experimentů ve středověku?", opts: ["Isaac Newton", "Galileo Galilei", "Albert Einstein", "Nikola Tesla"], ans: [1], pts: 1.0, hint: "Dokazoval hypotézy pomocí měření.", rationale: "Galileo Galilei zavedl metodu dokazování hypotéz skrze přesné kvantitativní experimenty[cite: 13]." },
+    { id: 3, q: "Základním cílem měření je:", opts: ["Získat co největší počet dat", "Získat správnou hodnotu měřené veličiny", "Vytvořit graf", "Prodat měřicí přístroj"], ans: [1], pts: 1.0, hint: "Hledáme skutečnou hodnotu.", rationale: "Hlavním účelem měření je zjištění reálné hodnoty sledované fyzikální veličiny[cite: 14]." },
+    { id: 4, q: "V moderním měření v ICT převažují systémy:", opts: ["Analogové s mechanickým ukazatelem", "Digitální automatizované měřicí systémy", "Pouze manuální odečty", "Pneumatické systémy"], ans: [1], pts: 1.0, hint: "Dnešní doba vyžaduje zpracování v PC.", rationale: "Moderní ICT využívá digitální technologie pro rychlé a přesné zpracování dat[cite: 13, 19]." },
+    { id: 5, q: "Mezi hlavní výhody automatizace měření patří:", opts: ["Zpomalení procesu pro lepší kontrolu", "Eliminace lidské chyby a rychlost", "Nutnost neustálé přítomnosti operátora", "Vyšší spotřeba energie"], ans: [1], pts: 1.0, hint: "Stroj se neunaví.", rationale: "Automatizace odstraňuje chyby při odečtu a dramaticky zrychluje vyčítání dat přes komunikační rozhraní[cite: 19]." },
+    { id: 6, q: "Využití strojového učení pro filtraci šumu patří do oblasti:", opts: ["Klasické metrologie", "Umělé inteligence (AI)", "Cloud Computingu", "Edge Computingu"], ans: [1], pts: 1.0, hint: "Jde o inteligentní zpracování dat.", rationale: "AI se v měření využívá k detekci anomálií a automatické filtraci šumu[cite: 18]." },
+    { id: 7, q: "Pojem 'Edge Computing' v měření znamená:", opts: ["Zpracování dat pouze v cloudu", "Předzpracování dat přímo u senzoru na okraji sítě", "Měření pomocí hranatých přístrojů", "Přenos dat přes satelit"], ans: [1], pts: 1.0, hint: "Edge = okraj.", rationale: "Data se zpracovávají lokálně u zdroje (senzoru), aby se snížil objem přenášených dat do cloudu[cite: 18]." },
+    { id: 8, q: "Co je to 'IoT' v kontextu měření?", opts: ["Internet of Tools", "Internet of Things (Internet věcí)", "Internal Output Time", "Integration of Testing"], ans: [1], pts: 1.0, hint: "Mnoho propojených zařízení.", rationale: "IoT představuje miliardy chytrých senzorů a zařízení, která neustále monitorují prostředí[cite: 18]." },
+    { id: 9, q: "V ICT systémech se data k měření často odesílají do:", opts: ["Skladů papíru", "Cloudu", "Analogových registrů", "Místní knihovny"], ans: [1], pts: 1.0, hint: "Vzdálené úložiště.", rationale: "Cloudové výpočty umožňují centrální zpracování a dlouhodobou archivaci velkých objemů naměřených dat[cite: 18]." },
+    { id: 10, q: "Který krok předchází v metodice samotnému měření?", opts: ["Úklid laboratoře", "Příprava měření a výběr metody", "Psaní závěrečné zprávy", "Vypnutí elektřiny"], ans: [1], pts: 1.0, hint: "Plánování je základ.", rationale: "Před měřením je nutné provést přípravu, zvolit správnou metodu a vhodné přístroje[cite: 25]." },
+    { id: 11, q: "Součástí měření v ICT je také 'Prediktivní údržba'. Ta slouží k:", opts: ["Opravě zařízení po jeho zničení", "Předpovídání poruch hardwaru na základě měření", "Instalaci her", "Měření rychlosti větru"], ans: [1], pts: 1.0, hint: "Předvídání problémů.", rationale: "Měření a analýza dat pomocí AI umožňují včasnou predikci možných závad[cite: 18]." },
+    { id: 12, q: "Sběr dat ze senzorů v reálném čase je typický pro:", opts: ["Středověké měření", "Průmysl 4.0 a moderní ICT", "Pouze laboratorní podmínky", "Měření s pomocí logaritmického pravítka"], ans: [1], pts: 1.0, hint: "Současný trend.", rationale: "Sběr dat v reálném čase je klíčovým prvkem moderních digitálních systémů a Průmyslu 4.0[cite: 18]." },
+    { id: 13, q: "Zpracování naměřených dat v PC umožňuje:", opts: ["Snížit přesnost měření", "Využít složité algoritmy, které přístroj sám nemá", "Vymazat všechna data", "Zvýšit fyzickou hmotnost přístroje"], ans: [1], pts: 1.0, hint: "Software přidává funkce.", rationale: "Pokročilé algoritmy v PC dodávají měření novou funkčnost, kterou hardware samotného přístroje nedisponuje[cite: 19]." },
+    { id: 14, q: "Co znamená eliminace vlivu nepřesného manuálního odečtu?", opts: ["Čtení výsledků přes lupu", "Nahrazení člověka digitálním přenosem dat", "Zákaz měření v noci", "Psaní výsledků křídou"], ans: [1], pts: 1.0, hint: "Digitální přenos je spolehlivější.", rationale: "Automatické vyčítání hodnot eliminuje lidské chyby vzniklé z nepozornosti nebo únavy[cite: 19]." },
+    { id: 15, q: "Měření v informačních technologiích doprovází:", opts: ["Jen servis", "Jen výrobu", "Vývoj, výrobu i servis zařízení", "Pouze nákup součástek"], ans: [2], pts: 1.0, hint: "Celý životní cyklus.", rationale: "Měření je nezbytné ve všech fázích od počátečního vývoje až po následnou údržbu v servisu[cite: 13]." },
+    { id: 16, q: "Získání digitálních dat usnadňuje:", opts: ["Jejich ztrátu", "Archivaci a tvorbu protokolů", "Mechanické opotřebení přístroje", "Složité kreslení grafů rukou"], ans: [1], pts: 1.0, hint: "Digitální forma se snadno ukládá.", rationale: "Digitální data lze snadno ukládat do databází, sdílet mezi systémy a automaticky z nich generovat protokoly[cite: 19]." },
+    { id: 17, q: "Co je hlavním tématem Okruhu 01 předmětu?", opts: ["Chyby měření", "Úvod do předmětu a historie měření", "Vysokofrekvenční technika", "Datové sítě 5G"], ans: [1], pts: 1.0, hint: "První přednáška.", rationale: "První okruh se věnuje historii měření, významu oboru a výhodám automatizace[cite: 1, 2]." },
+    { id: 18, q: "Pro ICT měření je typické využití komunikačních rozhraní. Příkladem je:", opts: ["Kladivo a hřebík", "USB, Ethernet, GPIB", "Pouze telefonní hovor", "Švihadlo"], ans: [1], pts: 1.0, hint: "Způsoby propojení přístroje s PC.", rationale: "Přístroje komunikují s počítačem přes standardizovaná rozhraní jako USB nebo Ethernet[cite: 19]." },
+    { id: 19, q: "Měření v ICT pomáhá optimalizovat:", opts: ["Hmotnost automobilů", "Výkon sítí a energetickou spotřebu systémů", "Kvalitu jídla v menze", "Počet stránek v učebnici"], ans: [1], pts: 1.0, hint: "Sítě a systémy.", rationale: "Měření slouží k monitorování a ladění parametrů IT infrastruktury pro dosažení vyšší efektivity[cite: 18, 19]." },
+    { id: 20, q: "Který inženýr vyučuje tento předmět dle podkladů?", opts: ["Ing. Roman Šebesta, Ph.D.", "Ing. Lukáš Danys, Ph.D.", "Ing. Jan Novák", "Ing. Petr Svoboda"], ans: [1], pts: 1.0, hint: "Podívej se na úvodní stranu PDF.", rationale: "Přednášky Okruhu 01 a 02 připravil Ing. Lukáš Danys, Ph.D.[cite: 2, 14]." },
+
+    // OKRUH 02: CHYBY A NEJISTOTY MĚŘENÍ (20 otázek)
+    { id: 21, q: "Každý výsledek měření je v realitě vždy zatížen:", opts: ["Nulovou odchylkou", "Odchylkou (chybou měření)", "Pouze špatnou náladou měřiče", "Vysokou cenou"], ans: [1], pts: 1.0, hint: "Ideální měření neexistuje.", rationale: "V reálném světě nelze dosáhnout absolutní hodnoty bez jakékoliv odchylky[cite: 15]." },
+    { id: 22, q: "Cílem analýzy nejistot je:", opts: ["Udělal měření složitější", "Kvantitativně vyjádřit kvalitu výsledku měření", "Najít viníka chyby", "Zvýšit prodej přístrojů"], ans: [1], pts: 1.0, hint: "Jak moc výsledku věříme?", rationale: "Nejistota měření dává informaci o tom, v jakém rozmezí se pravděpodobně nachází skutečná hodnota[cite: 15]." },
+    { id: 23, q: "Nejistota typu A se určuje na základě:", opts: ["Specifikací výrobce", "Statistického zpracování opakovaných měření", "Odhadu měřicího technika", "Ceny měřicího přístroje"], ans: [1], pts: 1.0, hint: "Vyžaduje sérii měření.", rationale: "Metoda typu A využívá statistické metody pro vyhodnocení série naměřených hodnot[cite: 22, 32]." },
+    { id: 24, q: "Pro stanovení nejistoty typu B se využívají:", opts: ["Opakovaná měření", "Údaje v katalogových listech a certifikátech přístrojů", "Pouze sny a představy", "Věštba z křišťálové koule"], ans: [1], pts: 1.0, hint: "Zdroje mimo statistiku.", rationale: "Metoda typu B vychází z jiných zdrojů než statistických, především ze specifikací výrobců přístrojů[cite: 22, 32]." },
+    { id: 25, q: "Kombinovaná standardní nejistota se vypočítá jako:", opts: ["Prostý součet typu A a typu B", "Geometrický součet (odmocnina ze součtu čtverců) složek A a B", "Rozdíl mezi A a B", "Průměr z A a B"], ans: [1], pts: 1.0, hint: "Využívá se Pythagorova věta.", rationale: "Kombinovaná nejistota sjednocuje vlivy typu A a B pomocí geometrického součtu[cite: 32]." },
+    { id: 26, q: "Rozšířená nejistota měření se získá:", opts: ["Vydělením kombinované nejistoty dvěma", "Vynásobením kombinované nejistoty koeficientem rozšíření (k)", "Přičtením deseti k výsledku", "Ignorováním všech chyb"], ans: [1], pts: 1.0, hint: "Zvyšujeme interval spolehlivosti.", rationale: "Rozšířená nejistota definuje interval, ve kterém leží hodnota s vysokou pravděpodobností (zpravidla 95 %)[cite: 30, 32]." },
+    { id: 27, q: "Systematické chyby měření je nutné před výpočtem nejistot:", opts: ["Znásobit", "Eliminovat nebo korigovat", "Přehlédnout", "Uveřejnit v novinách"], ans: [1], pts: 1.0, hint: "Musíme je odstranit z dat.", rationale: "Systematické chyby (např. posun nuly) musí být opraveny dříve, než začneme počítat nejistoty[cite: 30, 32]." },
+    { id: 28, q: "Při rovnoměrném rozdělení pravděpodobnosti (u typu B) se dělí odchylka (a) hodnotou:", opts: ["Odmocnina ze dvou", "Odmocnina ze tří", "Deseti", "Pěti"], ans: [1], pts: 1.0, hint: "Standardní vzorec pro rovnoměrné rozdělení.", rationale: "Vztah pro výpočet nejistoty při rovnoměrném rozdělení je u(x) = a / √3[cite: 32]." },
+    { id: 29, q: "Která z těchto chyb je náhodná?", opts: ["Chyba způsobená špatně nastaveným rozsahem", "Chyba způsobená kolísáním teploty nebo šumem", "Chyba v nule přístroje", "Chyba v konstantě přístroje"], ans: [1], pts: 1.0, hint: "Mění se nepředvídatelně.", rationale: "Náhodné chyby jsou nepravidelné a projevují se rozptylem hodnot při opakovaném měření[cite: 15]." },
+    { id: 30, q: "Metodický postup vyhodnocení měření začíná:", opts: ["Výpočtem průměru", "Provedením opakovaných měření a eliminací systematických chyb", "Vypnutím počítače", "Podepsáním protokolu"], ans: [1], pts: 1.0, hint: "První kroky v laboratoři.", rationale: "Nejdříve musíme získat data opakovaným měřením a očistit je od známých chyb[cite: 32]." },
+    { id: 31, q: "Co vyjadřuje koeficient rozšíření 'k' (obvykle k=2)?", opts: ["Počet měřicích přístrojů", "Pravděpodobnost (interval spolehlivosti) výsledku", "Rychlost měření", "Cenu měření"], ans: [1], pts: 1.0, hint: "Souvisí s Gaussovou křivkou.", rationale: "Koeficient k=2 odpovídá u normálního rozdělení pravděpodobnosti pokrytí cca 95 %[cite: 30]." },
+    { id: 32, q: "Nejistota typu A klesá s:", opts: ["Rostoucím počtem měření (n)", "Klesajícím počtem měření", "Vypnutím přístroje", "Zvýšením teploty v místnosti"], ans: [0], pts: 1.0, hint: "Více dat = lepší statistika.", rationale: "Čím více opakovaných měření provedeme, tím přesněji dokážeme statisticky určit střední hodnotu[cite: 32]." },
+    { id: 33, q: "Absolutní chyba měření je definována jako:", opts: ["Rozdíl naměřené a skutečné hodnoty", "Podíl naměřené a skutečné hodnoty", "Součet všech čísel na displeji", "Druhá mocnina napětí"], ans: [0], pts: 1.0, hint: "Delta x.", rationale: "Absolutní chyba udává o kolik jednotek se naměřená hodnota liší od reality[cite: 15]." },
+    { id: 34, q: "Relativní chyba se obvykle vyjadřuje v:", opts: ["Metrech", "Procentech", "Kilogramech", "Sekundách"], ans: [1], pts: 1.0, hint: "Poměrná hodnota.", rationale: "Relativní chyba dává chybu do poměru k měřené hodnotě, často se uvádí v %[cite: 15]." },
+    { id: 35, q: "Zdrojem nejistoty typu B může být:", opts: ["Rozlišení číslicového měřicího přístroje", "Náhodný šum v signálu", "Průvan v místnosti", "Chyba v zápisu technika"], ans: [0], pts: 1.0, hint: "Vlastnost daná konstrukcí přístroje.", rationale: "Konstrukční parametry jako citlivost nebo rozlišení jsou typickými vstupy pro typ B[cite: 22, 32]." },
+    { id: 36, q: "Matematický model měření slouží k:", opts: ["Kreslení obrázků", "Definování vztahu mezi vstupními veličinami a výsledkem", "Změření délky stolu", "Výpočtu ceny elektřiny"], ans: [1], pts: 1.0, hint: "Rovnice měření.", rationale: "Model popisuje, jak se z dílčích měření vypočítá výsledná hodnota[cite: 32]." },
+    { id: 37, q: "Konečný výsledek měření se zapisuje ve tvaru:", opts: ["Pouze číslo", "Hodnota ± Rozšířená nejistota (včetně jednotek)", "Jméno a příjmení", "Číslo v závorce"], ans: [1], pts: 1.0, hint: "Kompletní informace o měření.", rationale: "Správný zápis musí obsahovat naměřenou hodnotu, její nejistotu a fyzikální jednotku[cite: 30, 32]." },
+    { id: 38, q: "Standardní nejistota typu B se značí:", opts: ["u_a(x)", "u_b(x)", "U", "k"], ans: [1], pts: 1.0, hint: "Malé u s indexem typu.", rationale: "Pro nejistotu typu B se používá mezinárodní značení u_b[cite: 32]." },
+    { id: 39, q: "Kdy je výsledek měření považován za použitelný?", opts: ["Když je chyba nulová", "Když je chyba přijatelná pro daný účel", "Když měření trvalo dlouho", "Když byl přístroj drahý"], ans: [1], pts: 1.0, hint: "Rozhoduje kontext použití.", rationale: "Klíčové je, zda výsledek i přes svou chybu splňuje požadavky na přesnost pro danou aplikaci[cite: 15]." },
+    { id: 40, q: "V ICT měření musíme brát v úvahu nejistoty:", opts: ["Pouze analogové", "Složené z mnoha zdrojů (přístroj, sonda, prostředí)", "Jen ty, které nám vyhovují", "Žádné"], ans: [1], pts: 1.0, hint: "Měření je komplexní proces.", rationale: "Celková nejistota je vždy výsledkem kombinace mnoha dílčích vlivů[cite: 32]." }
+];
+
+let data = [], curScore = 0, maxPosScore = 0, solved = 0;
+
+function start() {
+    const qS = document.getElementById('shufQ').checked, aS = document.getElementById('shufA').checked;
+    data = JSON.parse(JSON.stringify(master));
+    if(qS) data.sort(() => Math.random() - 0.5);
+    if(aS) data.forEach(d => {
+        let os = d.opts.map((o,i) => ({t:o, c:d.ans.includes(i)}));
+        os.sort(() => Math.random() - 0.5);
+        d.opts = os.map(o => o.t); d.ans = os.reduce((a,o,i) => {if(o.c) a.push(i); return a;}, []);
+    });
+    document.getElementById('setup').style.display = 'none';
+    renderNav(); renderQuiz();
+}
+
+function renderNav() {
+    const g = document.getElementById('navGrid');
+    data.forEach((_, i) => {
+        let d = document.createElement('div');
+        d.className = 'nav-item'; d.id = `nav-${i}`;
+        d.innerText = i + 1;
+        d.onclick = () => document.getElementById(`qcard-${i}`).scrollIntoView({behavior:'smooth'});
+        g.appendChild(d);
+    });
+}
+
+function renderQuiz() {
+    const c = document.getElementById('quiz');
+    data.forEach((d, i) => {
+        let isM = d.ans.length > 1;
+        let card = document.createElement('div');
+        card.className = 'q-card'; card.id = `qcard-${i}`;
+        card.innerHTML = `
+            <div class="q-header">
+                <div class="q-id-box">
+                    <span class="blue-sq-icon" id="sq-${i}" onclick="toggleSquare(${i})"></span>
+                    <span id="num-display-${i}" style="font-weight:bold">${i+1}</span>
+                    <span style="color:#666; margin-left:10px">ID ${d.id}</span>
+                </div>
+                <div style="color:var(--primary); font-weight:bold">${d.pts} b</div>
+            </div>
+            <div style="margin-bottom:25px; line-height:1.4">${d.q}</div>
+            <div id="opts-${i}">
+                ${d.opts.map((o,oi) => `<label class="opt-label"><input type="${isM?'checkbox':'radio'}" name="q${i}" value="${oi}"><span>${o}</span></label>`).join('')}
+            </div>
+            <button class="check-btn" id="btn-${i}" onclick="check(${i})">ODEVZDAT ÚLOHU</button>
+            <div id="feedback-${i}" class="points-feedback"></div>
+        `;
+        c.appendChild(card);
+    });
+}
+
+function toggleSquare(i) {
+    const icon = document.getElementById(`sq-${i}`);
+    const navItem = document.getElementById(`nav-${i}`);
+    const numDisplay = document.getElementById(`num-display-${i}`);
+    icon.classList.toggle('active');
+    navItem.classList.toggle('flagged');
+    const isAct = icon.classList.contains('active');
+    navItem.innerText = isAct ? '?' : i + 1;
+    numDisplay.innerText = isAct ? '?' : i + 1;
+}
+
+function check(i) {
+    const d = data[i], block = document.getElementById(`opts-${i}`);
+    const sel = Array.from(block.querySelectorAll('input:checked')).map(n => parseInt(n.value));
+    if(!sel.length) return alert("Musíte vybrat odpověď!");
+
+    document.getElementById(`btn-${i}`).disabled = true;
+    block.querySelectorAll('input').forEach(inp => inp.disabled = true);
+
+    let correctCount = 0, wrongCount = 0;
+    d.ans.forEach(a => { if(sel.includes(a)) correctCount++; });
+    sel.forEach(s => { if(!d.ans.includes(s)) wrongCount++; });
+
+    let gain = (correctCount - wrongCount) * (d.pts / d.ans.length);
+    if(gain < 0) gain = 0;
+    
+    curScore += gain; maxPosScore += d.pts; solved++;
+
+    const feed = document.getElementById(`feedback-${i}`);
+    feed.style.display = 'block';
+    feed.innerHTML = `Získáno ${gain.toFixed(2)} z ${d.pts} b. <div class="hint-box"><strong>Odůvodnění:</strong> ${d.hint}</div>`;
+    feed.style.background = (gain >= d.pts * 0.99) ? '#e6f4ea' : gain > 0 ? '#fff4e5' : '#fce8e6';
+
+    let nav = document.getElementById(`nav-${i}`);
+    if(gain >= d.pts * 0.99) nav.classList.add('status-green');
+    else if(gain > 0) nav.classList.add('status-orange');
+    else nav.classList.add('status-red');
+
+    block.querySelectorAll('.opt-label').forEach((l, oi) => {
+        if(d.ans.includes(oi)) l.classList.add('correct');
+        else if(sel.includes(oi)) l.classList.add('wrong');
+    });
+
+    document.getElementById('prog').innerText = `Zodpovězeno: ${solved} / ${data.length}`;
+    document.getElementById('score').innerText = `Body: ${curScore.toFixed(2)} / ${maxPosScore.toFixed(2)}`;
+}
+</script>
+</body>
+</html>
